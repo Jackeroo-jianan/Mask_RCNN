@@ -73,10 +73,12 @@ class Config(object):
     NUM_CLASSES = 1  # Override in sub-classes
 
     # Length of square anchor side in pixels
+    # 锚点 宽高像素
     RPN_ANCHOR_SCALES = (32, 64, 128, 256, 512)
 
     # Ratios of anchors at each cell (width/height)
     # A value of 1 represents a square anchor, and 0.5 is a wide anchor
+    # 锚点 宽/高 比例
     RPN_ANCHOR_RATIOS = [0.5, 1, 2]
 
     # Anchor stride

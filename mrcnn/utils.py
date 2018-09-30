@@ -589,24 +589,32 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         value is 2 then generate anchors for every other feature map pixel.
     """
     # Get all combinations of scales and ratios
+    # scales = (32, 64, 128, 256, 512)，ratios = [0.5, 1, 2]
+    # np.meshgrid 按x,y维度，分别扩充scales,ratios，结果维度(5,3)
     scales, ratios = np.meshgrid(np.array(scales), np.array(ratios))
-    scales = scales.flatten()
-    ratios = ratios.flatten()
+    scales = scales.flatten()#将二维降到一维(32, 64, 128, 256, 512, ...)横着循环3次
+    ratios = ratios.flatten()#将二维降到一维(0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, ...)竖着循环5次
 
     # Enumerate heights and widths from scales and ratios
+    # 框的宽高
     heights = scales / np.sqrt(ratios)
     widths = scales * np.sqrt(ratios)
 
     # Enumerate shifts in feature space
+    # 每个框的中心坐标
+    # shape特征图宽高，np.arange生成0到某个值-1的按步长间隔的数组，feature_stride(特征步长其中一个)=[4, 8, 16, 32, 64]，anchor_stride=1
     shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
     shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
+    #shifts_x((1024/4),(1024/4))
     shifts_x, shifts_y = np.meshgrid(shifts_x, shifts_y)
 
     # Enumerate combinations of shifts, widths, and heights
+    # 生成每个坐标与宽高对应(65536=(1024/4)*(1024/4), 15)
     box_widths, box_centers_x = np.meshgrid(widths, shifts_x)
     box_heights, box_centers_y = np.meshgrid(heights, shifts_y)
 
     # Reshape to get a list of (y, x) and a list of (h, w)
+    # 分离坐标与宽高
     box_centers = np.stack(
         [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
@@ -630,6 +638,7 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     """
     # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
+    # scales=(32, 64, 128, 256, 512),ratios=[0.5, 1, 2],feature_shapes 每一等分对应的1024像素，feature_strides=[4, 8, 16, 32, 64]
     anchors = []
     for i in range(len(scales)):
         anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],

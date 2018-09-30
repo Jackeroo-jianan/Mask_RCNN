@@ -56,3 +56,5 @@ pip-delete-this-directory.txt
 .venv
 venv/
 ENV/
+
+/samples/coco/val2014.zip
