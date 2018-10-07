@@ -58,3 +58,4 @@ venv/
 ENV/
 
 /samples/coco/val2014.zip
+/data
