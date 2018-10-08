@@ -1881,8 +1881,10 @@ class MaskRCNN():
                             "For example, use 256, 320, 384, 448, 512, ... etc. ")
 
         # Inputs
+        # 图片
         input_image = KL.Input(
             shape=[None, None, config.IMAGE_SHAPE[2]], name="input_image")
+        # 图片信息
         input_image_meta = KL.Input(shape=[config.IMAGE_META_SIZE],
                                     name="input_image_meta")
         if mode == "training":
@@ -1916,6 +1918,7 @@ class MaskRCNN():
                     name="input_gt_masks", dtype=bool)
         elif mode == "inference":
             # Anchors in normalized coordinates
+            # 候选框
             input_anchors = KL.Input(shape=[None, 4], name="input_anchors")
 
         # Build the shared convolutional layers.
@@ -2001,6 +2004,7 @@ class MaskRCNN():
         # Generate proposals
         # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
         # and zero padded.
+        # ROI层，把不同大小图片压缩到固定大小，用于后续分类及目标检测
         proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training"\
             else config.POST_NMS_ROIS_INFERENCE
         rpn_rois = ProposalLayer(
@@ -2077,6 +2081,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
+            # 构造FPN分类网络
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
@@ -2086,6 +2091,7 @@ class MaskRCNN():
             # Detections
             # output is [batch, num_detections, (y1, x1, y2, x2, class_id, score)] in
             # normalized coordinates
+            # 目标检测框、分类、分数等
             detections = DetectionLayer(config, name="mrcnn_detection")(
                 [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
 
@@ -2096,7 +2102,7 @@ class MaskRCNN():
                                               config.MASK_POOL_SIZE,
                                               config.NUM_CLASSES,
                                               train_bn=config.TRAIN_BN)
-
+            # 构造模型，输入参数，输出参数
             model = KM.Model([input_image, input_image_meta, input_anchors],
                              [detections, mrcnn_class, mrcnn_bbox,
                                  mrcnn_mask, rpn_rois, rpn_class, rpn_bbox],
@@ -2446,8 +2452,10 @@ class MaskRCNN():
                 min_scale=self.config.IMAGE_MIN_SCALE,
                 max_dim=self.config.IMAGE_MAX_DIM,
                 mode=self.config.IMAGE_RESIZE_MODE)
+            #将颜色范围从0-255转到均值在0附件
             molded_image = mold_image(molded_image, self.config)
             # Build image_meta
+            # 将所有参数组成一个数组，包含图片分类ID、原图WHC、缩放后图片WHC、窗口、缩放比例、类别数量
             image_meta = compose_image_meta(
                 0, image.shape, molded_image.shape, window, scale,
                 np.zeros([self.config.NUM_CLASSES], dtype=np.int32))
@@ -2456,6 +2464,7 @@ class MaskRCNN():
             windows.append(window)
             image_metas.append(image_meta)
         # Pack into arrays
+        # 转成数组
         molded_images = np.stack(molded_images)
         image_metas = np.stack(image_metas)
         windows = np.stack(windows)
@@ -2542,16 +2551,19 @@ class MaskRCNN():
         assert len(
             images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
 
+        #显示读到的图片大小与路径
         if verbose:
             log("Processing {} images".format(len(images)))
             for image in images:
                 log("image", image)
 
         # Mold inputs to format expected by the neural network
+        # 图片预处理，变成1024*1024，molded_images变换后的图片数据，image_metas图片信息，windows图片位置框
         molded_images, image_metas, windows = self.mold_inputs(images)
 
         # Validate image sizes
         # All images in a batch MUST be of the same size
+        # 验证图片大小，图片必须用一大小
         image_shape = molded_images[0].shape
         for g in molded_images[1:]:
             assert g.shape == image_shape,\
@@ -2561,6 +2573,7 @@ class MaskRCNN():
         anchors = self.get_anchors(image_shape)
         # Duplicate across the batch dimension because Keras requires it
         # TODO: can this be optimized to avoid duplicating the anchors?
+        # np.broadcast_to复制扩展一个维度
         anchors = np.broadcast_to(
             anchors, (self.config.BATCH_SIZE,) + anchors.shape)
 
@@ -2569,6 +2582,7 @@ class MaskRCNN():
             log("image_metas", image_metas)
             log("anchors", anchors)
         # Run object detection
+        # 识别
         detections, _, _, mrcnn_mask, _, _, _ =\
             self.keras_model.predict(
                 [molded_images, image_metas, anchors], verbose=0)
@@ -2666,6 +2680,7 @@ class MaskRCNN():
             # TODO: Remove this after the notebook are refactored to not use it
             self.anchors = a
             # Normalize coordinates
+            # 坐标归一化
             self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(
                 a, image_shape[:2])
         return self._anchor_cache[tuple(image_shape)]

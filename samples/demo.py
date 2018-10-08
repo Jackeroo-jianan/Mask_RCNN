@@ -123,13 +123,16 @@ class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
 
 
 # Load a random image from the images folder
+# 读取随机图片
 file_names = next(os.walk(IMAGE_DIR))[2]
 image = skimage.io.imread(os.path.join(IMAGE_DIR, random.choice(file_names)))
 
 # Run detection
+# 识别图片
 results = model.detect([image], verbose=1)
 
 # Visualize results
+# 显示图片
 r = results[0]
 visualize.display_instances(image, r['rois'], r['masks'], r['class_ids'], 
                             class_names, r['scores'])

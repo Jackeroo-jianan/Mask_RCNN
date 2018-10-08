@@ -412,6 +412,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         be inserted in the returned image. If so, this window is the
         coordinates of the image part of the full image (excluding
         the padding). The x2, y2 pixels are not included.
+        缩放后的图片区域，不包括padding
     scale: The scale factor used to resize the image
     padding: Padding added to the image [(top, bottom), (left, right), (0, 0)]
     """
@@ -428,25 +429,29 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         return image, window, scale, padding, crop
 
     # Scale?
+    # 宽高中有一个小于min_dim时，进行缩放使最小边长等于min_dim。宽高都大于min_dim时，不进行缩放
     if min_dim:
         # Scale up but not down
         scale = max(1, min_dim / min(h, w))
+    # 限制最小缩放倍数
     if min_scale and scale < min_scale:
         scale = min_scale
 
     # Does it exceed max dim?
+    # 当mode为square(正方形)时，限制缩放后的宽高最大长度
     if max_dim and mode == "square":
         image_max = max(h, w)
         if round(image_max * scale) > max_dim:
             scale = max_dim / image_max
 
     # Resize image using bilinear interpolation
+    # 缩放图片
     if scale != 1:
         image = resize(image, (round(h * scale), round(w * scale)),
                        preserve_range=True)
 
     # Need padding or cropping?
-    if mode == "square":
+    if mode == "square":# 按最长边转成正方形，多余部分填充黑色
         # Get new height and width
         h, w = image.shape[:2]
         top_pad = (max_dim - h) // 2
@@ -456,7 +461,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
         image = np.pad(image, padding, mode='constant', constant_values=0)
         window = (top_pad, left_pad, h + top_pad, w + left_pad)
-    elif mode == "pad64":
+    elif mode == "pad64":# 填充为64的倍数
         h, w = image.shape[:2]
         # Both sides must be divisible by 64
         assert min_dim % 64 == 0, "Minimum dimension must be a multiple of 64"
@@ -477,7 +482,7 @@ def resize_image(image, min_dim=None, max_dim=None, min_scale=None, mode="square
         padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
         image = np.pad(image, padding, mode='constant', constant_values=0)
         window = (top_pad, left_pad, h + top_pad, w + left_pad)
-    elif mode == "crop":
+    elif mode == "crop":# 随机裁剪
         # Pick a random crop
         h, w = image.shape[:2]
         y = random.randint(0, (h - min_dim))
@@ -603,23 +608,30 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
     # Enumerate shifts in feature space
     # 每个框的中心坐标
     # shape特征图宽高，np.arange生成0到某个值-1的按步长间隔的数组，feature_stride(特征步长其中一个)=[4, 8, 16, 32, 64]，anchor_stride=1
+    # 第一层特征缩到原图的1/4，第二层再缩到1/2(原图1/8)，第三层再缩到1/2(原图1/16)，第四层再缩到1/2(原图1/32)，第五层再缩到1/2(原图1/64)
     shifts_y = np.arange(0, shape[0], anchor_stride) * feature_stride
     shifts_x = np.arange(0, shape[1], anchor_stride) * feature_stride
     #shifts_x((1024/4),(1024/4))
+    #shifts_x（沿X轴排列，Y轴不变），shifts_y（沿Y轴排列，X轴不变）
     shifts_x, shifts_y = np.meshgrid(shifts_x, shifts_y)
 
     # Enumerate combinations of shifts, widths, and heights
     # 生成每个坐标与宽高对应(65536=(1024/4)*(1024/4), 15)
+    # shifts_x,shifts_y会先由二维变成一维
     box_widths, box_centers_x = np.meshgrid(widths, shifts_x)
     box_heights, box_centers_y = np.meshgrid(heights, shifts_y)
 
     # Reshape to get a list of (y, x) and a list of (h, w)
     # 分离坐标与宽高
+    # np.stack后面加一个维度，数量为2，box_centers_y与box_centers_x对应维度组合
+    # np.reshape把(65536,15,2)转成(65536*15,2)
     box_centers = np.stack(
         [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
 
     # Convert to corner coordinates (y1, x1, y2, x2)
+    # 转成相对于左上角与右下角的框数据(y1, x1, y2, x2)
+    # np.concatenate按对应维度进行数据拼接，(65536*15, 2), axis=1(第一维度不变，合并第二维度)，(65536*15, 4)
     boxes = np.concatenate([box_centers - 0.5 * box_sizes,
                             box_centers + 0.5 * box_sizes], axis=1)
     return boxes
@@ -635,6 +647,7 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
     anchors: [N, (y1, x1, y2, x2)]. All generated anchors in one array. Sorted
         with the same order of the given scales. So, anchors of scale[0] come
         first, then anchors of scale[1], and so on.
+    生成所有特征层的候选框，5层特征，框大小分别时32，64，128，256，512，每个框做3种变换，(256*256+128*128+64*64+32*36+16*16)*(5*3)=1311360个候选框
     """
     # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
@@ -867,6 +880,7 @@ def norm_boxes(boxes, shape):
 
     Returns:
         [N, (y1, x1, y2, x2)] in normalized coordinates
+    坐标归一化
     """
     h, w = shape
     scale = np.array([h - 1, w - 1, h - 1, w - 1])
