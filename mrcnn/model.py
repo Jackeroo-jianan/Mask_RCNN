@@ -822,8 +822,10 @@ class DetectionLayer(KE.Layer):
         # in the image that excludes the padding.
         # Use the shape of the first image in the batch to normalize the window
         # because we know that all images get resized to the same size.
+        # 图片信息解析
         m = parse_image_meta_graph(image_meta)
         image_shape = m['image_shape'][0]
+        # 归一化坐标，坐标范围0.0-1.0
         window = norm_boxes_graph(m['window'], image_shape[:2])
 
         # Run detection refinement graph on each item in the batch
@@ -945,6 +947,8 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
         probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
         bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))] Deltas to apply to
                      proposal boxes
+    ROI Pooling不同大小到特征图缩放到特定大小
+    然后做分类，并推测框内真实物体到位置，用于修正框到位置
     """
     # ROI Pooling
     # Shape: [batch, num_rois, POOL_SIZE, POOL_SIZE, channels]
@@ -965,12 +969,14 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     shared = KL.Lambda(lambda x: K.squeeze(K.squeeze(x, 3), 2),
                        name="pool_squeeze")(x)
 
+    # 分类
     # Classifier head
     mrcnn_class_logits = KL.TimeDistributed(KL.Dense(num_classes),
                                             name='mrcnn_class_logits')(shared)
     mrcnn_probs = KL.TimeDistributed(KL.Activation("softmax"),
                                      name="mrcnn_class")(mrcnn_class_logits)
 
+    # 框位置修正
     # BBox head
     # [batch, num_rois, NUM_CLASSES * (dy, dx, log(dh), log(dw))]
     x = KL.TimeDistributed(KL.Dense(num_classes * 4, activation='linear'),
@@ -999,10 +1005,12 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
+    # 提取固定大小的特征值
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_mask")([rois, image_meta] + feature_maps)
 
     # Conv layers
+    # 一系列的卷积
     x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv1")(x)
     x = KL.TimeDistributed(BatchNorm(),
@@ -1026,9 +1034,10 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
     x = KL.TimeDistributed(BatchNorm(),
                            name='mrcnn_mask_bn4')(x, training=train_bn)
     x = KL.Activation('relu')(x)
-
+    # 反向卷积，大小扩大一倍
     x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
                            name="mrcnn_mask_deconv")(x)
+    # (1,1)卷积提取特征，sigmoid激活函数，值范围转到0-1
     x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
                            name="mrcnn_mask")(x)
     return x
@@ -2081,7 +2090,7 @@ class MaskRCNN():
         else:
             # Network Heads
             # Proposal classifier and BBox regressor heads
-            # 构造FPN分类网络
+            # 通过FPN获得的特征图片进行分类，用于对各特征层分类，并调整框的位置
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rpn_rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
@@ -2096,7 +2105,9 @@ class MaskRCNN():
                 [rpn_rois, mrcnn_class, mrcnn_bbox, input_image_meta])
 
             # Create masks for detections
+            # 为监测结果创建蒙版
             detection_boxes = KL.Lambda(lambda x: x[..., :4])(detections)
+            # 创建蒙版
             mrcnn_mask = build_fpn_mask_graph(detection_boxes, mrcnn_feature_maps,
                                               input_image_meta,
                                               config.MASK_POOL_SIZE,
@@ -2109,6 +2120,7 @@ class MaskRCNN():
                              name='mask_rcnn')
 
         # Add multi-GPU support.
+        # 多GPU
         if config.GPU_COUNT > 1:
             from mrcnn.parallel_model import ParallelModel
             model = ParallelModel(model, config.GPU_COUNT)
@@ -2848,6 +2860,7 @@ def parse_image_meta_graph(meta):
     meta: [batch, meta length] where meta length depends on NUM_CLASSES
 
     Returns a dict of the parsed tensors.
+    解析并分割图片信息
     """
     image_id = meta[:, 0]
     original_image_shape = meta[:, 1:4]
@@ -2914,6 +2927,7 @@ def norm_boxes_graph(boxes, shape):
 
     Returns:
         [..., (y1, x1, y2, x2)] in normalized coordinates
+    归一化坐标
     """
     h, w = tf.split(tf.cast(shape, tf.float32), 2)
     scale = tf.concat([h, w, h, w], axis=-1) - tf.constant(1.0)

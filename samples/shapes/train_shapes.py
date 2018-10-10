@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # # Mask R-CNN - Train on Shapes Dataset
@@ -21,6 +21,9 @@ import numpy as np
 import cv2
 import matplotlib
 import matplotlib.pyplot as plt
+import yaml
+import keras
+from PIL import Image
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
@@ -34,6 +37,8 @@ from mrcnn import visualize
 from mrcnn.model import log
 
 # get_ipython().run_line_magic('matplotlib', 'inline')
+
+# 参考https://blog.csdn.net/l297969586/article/details/79140840/
 
 # Directory to save logs and trained model
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
@@ -61,18 +66,20 @@ class ShapesConfig(Config):
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
     GPU_COUNT = 1
-    IMAGES_PER_GPU = 8
+    IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 3  # background + 3 shapes
+    # 分类数量
+    NUM_CLASSES = 1 + 1  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
-    IMAGE_MIN_DIM = 128
-    IMAGE_MAX_DIM = 128
+    IMAGE_MIN_DIM = 800
+    IMAGE_MAX_DIM = 1280
 
     # Use smaller anchors because our image and objects are small
-    RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128)  # anchor side in pixels
+    # 控制识别图片的大小
+    RPN_ANCHOR_SCALES = (8*6, 16*6, 32*6, 64*6, 128*6)  # anchor side in pixels
 
     # Reduce training ROIs per image because the images are small and have
     # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
@@ -83,6 +90,9 @@ class ShapesConfig(Config):
 
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 5
+
+    #增加一个全局变量
+    iter_num = 0
     
 config = ShapesConfig()
 config.display()
@@ -118,31 +128,56 @@ def get_ax(rows=1, cols=1, size=8):
 # In[4]:
 
 
-class ShapesDataset(utils.Dataset):
-    """Generates the shapes synthetic dataset. The dataset consists of simple
-    shapes (triangles, squares, circles) placed randomly on a blank surface.
-    The images are generated on the fly. No file access required.
+class MyDataset(utils.Dataset):
+    """自定义训练集
     """
 
-    def load_shapes(self, count, height, width):
+    def get_obj_index(self, image):
+        """得到该图中有多少个实例（物体）"""
+        n = np.max(image)
+        return n
+    
+    def from_yaml_get_class(self,image_id):
+        """解析labelme中得到的yaml文件，从而得到mask每一层对应的实例标签
+        """
+        info=self.image_info[image_id]
+        with open(info['yaml_path']) as f:
+            temp=yaml.load(f.read())
+            labels=temp['label_names']
+            del labels[0]
+        return labels
+
+    def draw_mask(self, num_obj, mask, image):
+        info = self.image_info[image_id]
+        # print("image:",image)
+        for index in range(num_obj):
+            for i in range(info['width']):
+                for j in range(info['height']):
+                    at_pixel = image.getpixel((i, j))
+                    if at_pixel == index + 1:
+                        mask[j, i, index] =1
+        return mask
+
+    #重新写load_shapes，里面包含自己的自己的类别
+    #并在self.image_info信息中添加了path、mask_path 、yaml_path
+    def load_shapes(self, count, height, width, img_floder, mask_floder, imglist,dataset_root_path):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
         """
         # Add classes
-        self.add_class("shapes", 1, "square")
-        self.add_class("shapes", 2, "circle")
-        self.add_class("shapes", 3, "triangle")
+        # 分类
+        self.add_class("shapes", 1, "mouse")# 老鼠
 
-        # Add images
-        # Generate random specifications of images (i.e. color and
-        # list of shapes sizes and locations). This is more compact than
-        # actual images. Images are generated on the fly in load_image().
         for i in range(count):
-            bg_color, shapes = self.random_image(height, width)
-            self.add_image("shapes", image_id=i, path=None,
-                           width=width, height=height,
-                           bg_color=bg_color, shapes=shapes)
+            filestr = imglist[i].split(".")[0]
+            filestr = filestr.split("_")[1]
+            # mask_path = mask_floder + "/" + filestr + ".png"
+            mask_path = dataset_root_path+"json/rgb_"+filestr+"_json/label.png"
+            yaml_path = dataset_root_path+"json/rgb_"+filestr+"_json/info.yaml"
+            self.add_image("shapes", image_id=i, path=img_floder + "/" + imglist[i],
+                           width=width, height=height, mask_path=mask_path,yaml_path=yaml_path)
+
 
     def load_image(self, image_id):
         """Generate an image from the specs of the given image ID.
@@ -151,11 +186,14 @@ class ShapesDataset(utils.Dataset):
         specs in image_info.
         """
         info = self.image_info[image_id]
-        bg_color = np.array(info['bg_color']).reshape([1, 1, 3])
-        image = np.ones([info['height'], info['width'], 3], dtype=np.uint8)
-        image = image * bg_color.astype(np.uint8)
-        for shape, color, dims in info['shapes']:
-            image = self.draw_shape(image, shape, dims, color)
+        # print("info:",info)
+        # bg_color = np.array(info['bg_color']).reshape([1, 1, 3])
+        # image = np.ones([info['height'], info['width'], 3], dtype=np.uint8)
+        # image = image * bg_color.astype(np.uint8)
+        # for shape, color, dims in info['shapes']:
+        #     image = self.draw_shape(image, shape, dims, color)
+        image = keras.preprocessing.image.load_img(info["path"],target_size=(info['height'], info['width']))
+        image = keras.preprocessing.image.img_to_array(image)
         return image
 
     def image_reference(self, image_id):
@@ -169,21 +207,36 @@ class ShapesDataset(utils.Dataset):
     def load_mask(self, image_id):
         """Generate instance masks for shapes of the given image ID.
         """
+        global iter_num
         info = self.image_info[image_id]
-        shapes = info['shapes']
-        count = len(shapes)
-        mask = np.zeros([info['height'], info['width'], count], dtype=np.uint8)
-        for i, (shape, _, dims) in enumerate(info['shapes']):
-            mask[:, :, i:i+1] = self.draw_shape(mask[:, :, i:i+1].copy(),
-                                                shape, dims, 1)
-        # Handle occlusions
+        count = 1  # number of object
+        img = Image.open(info['mask_path'])
+        img = img.resize((info['width'], info['height']))
+        num_obj = self.get_obj_index(img)
+        mask = np.zeros([info['height'], info['width'], num_obj], dtype=np.uint8)
+        mask = self.draw_mask(num_obj, mask, img)
         occlusion = np.logical_not(mask[:, :, -1]).astype(np.uint8)
-        for i in range(count-2, -1, -1):
+        for i in range(count - 2, -1, -1):
             mask[:, :, i] = mask[:, :, i] * occlusion
             occlusion = np.logical_and(occlusion, np.logical_not(mask[:, :, i]))
-        # Map class names to class IDs.
-        class_ids = np.array([self.class_names.index(s[0]) for s in shapes])
-        return mask.astype(np.bool), class_ids.astype(np.int32)
+        labels=[]
+        labels=self.from_yaml_get_class(image_id)
+        labels_form=[]
+        for i in range(len(labels)):
+            if labels[i].find("mouse")!=-1:
+                #print "mouse"
+                labels_form.append("mouse")
+            # elif labels[i].find("column")!=-1:
+            #     #print "column"
+            #     labels_form.append("column")
+            # elif labels[i].find("package")!=-1:
+            #     #print "package"
+            #     labels_form.append("package")
+            # elif labels[i].find("fruit")!=-1:
+            #     #print "fruit"
+            #     labels_form.append("fruit")
+        class_ids = np.array([self.class_names.index(s) for s in labels_form])
+        return mask, class_ids.astype(np.int32)
 
     def draw_shape(self, image, shape, dims, color):
         """Draws a shape from the given specs."""
@@ -248,15 +301,24 @@ class ShapesDataset(utils.Dataset):
 
 # In[5]:
 
+#基础设置
+dataset_root_path="D:/document/Share/labels/mouse/"
+img_floder = dataset_root_path+"rgb"
+mask_floder = dataset_root_path+"mask"
+#yaml_floder = dataset_root_path
+imglist = os.listdir(img_floder)
+count = len(imglist)
+width = 1280
+height = 800
 
 # Training dataset
-dataset_train = ShapesDataset()
-dataset_train.load_shapes(500, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+dataset_train = MyDataset()
+dataset_train.load_shapes(count, height, width, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_train.prepare()
 
 # Validation dataset
-dataset_val = ShapesDataset()
-dataset_val.load_shapes(50, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
+dataset_val = MyDataset()
+dataset_val.load_shapes(count, height, width, img_floder, mask_floder, imglist,dataset_root_path)
 dataset_val.prepare()
 
 
@@ -340,7 +402,7 @@ model.train(dataset_train, dataset_val,
 # Save weights
 # Typically not needed because callbacks save after every epoch
 # Uncomment to save manually
-model_path = os.path.join(MODEL_DIR, "mask_rcnn_shapes.h5")
+model_path = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
 model.keras_model.save_weights(model_path)
 
 
@@ -363,7 +425,7 @@ model = modellib.MaskRCNN(mode="inference",
 # Get path to saved weights
 # Either set a specific path or find last trained weights
 # model_path = os.path.join(ROOT_DIR, ".h5 file name here")
-model_path = model.find_last()
+# model_path = model.find_last()
 
 # Load trained weights
 print("Loading weights from ", model_path)
@@ -421,10 +483,4 @@ for image_id in image_ids:
     APs.append(AP)
     
 print("mAP: ", np.mean(APs))
-
-
-# In[ ]:
-
-
-
 
