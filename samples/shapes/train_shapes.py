@@ -45,8 +45,8 @@ from mrcnn.model import log
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
-# COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
+# COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
 # Download COCO trained weights from Releases if needed
 # if not os.path.exists(COCO_MODEL_PATH):
 #     utils.download_trained_weights(COCO_MODEL_PATH)
@@ -87,10 +87,10 @@ class ShapesConfig(Config):
     # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
     TRAIN_ROIS_PER_IMAGE = 32
 
-    # Use a small epoch since the data is simple
-    STEPS_PER_EPOCH = 500
+    # Use a small epoch since the data is simple训练步数
+    STEPS_PER_EPOCH = 100
 
-    # use small validation steps since the epoch is small
+    # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
 
 
