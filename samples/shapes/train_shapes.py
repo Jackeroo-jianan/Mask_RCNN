@@ -91,9 +91,6 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 5
 
-    # 增加一个全局变量
-    iter_num = 0
-
 
 config = ShapesConfig()
 config.display()
@@ -132,6 +129,9 @@ def get_ax(rows=1, cols=1, size=8):
 class MyDataset(utils.Dataset):
     """自定义训练集
     """
+    
+    # def __init__(self):
+    #     self.iter_num = 0
 
     def get_obj_index(self, image):
         """得到该图中有多少个实例（物体）"""
@@ -161,7 +161,7 @@ class MyDataset(utils.Dataset):
 
     # 重新写load_shapes，里面包含自己的自己的类别
     # 并在self.image_info信息中添加了path、mask_path 、yaml_path
-    def load_shapes(self, count, height, width, img_floder, mask_floder, imglist, dataset_root_path):
+    def load_shapes(self, count, height, width, img_floder, imglist, dataset_root_path):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
@@ -208,7 +208,7 @@ class MyDataset(utils.Dataset):
     def load_mask(self, image_id):
         """Generate instance masks for shapes of the given image ID.
         """
-        global iter_num
+        
         info = self.image_info[image_id]
         count = 1  # number of object
         img = Image.open(info['mask_path'])
@@ -310,23 +310,26 @@ class MyDataset(utils.Dataset):
 dataset_root_path = "/home/hillsun/hyj/labels/mouse/"
 dataset_val_root_path = "/home/hillsun/hyj/labels/mouse/test/"
 img_floder = dataset_root_path+"rgb"
-mask_floder = dataset_root_path+"mask"
+img_floder_val = dataset_val_root_path+"rgb"
+# mask_floder = dataset_root_path+"mask"
 #yaml_floder = dataset_root_path
 imglist = os.listdir(img_floder)
+imglist_val = os.listdir(img_floder_val)
 count = len(imglist)
+count_val = len(imglist_val)
 width = 1280
 height = 800
 
 # Training dataset
 dataset_train = MyDataset()
 dataset_train.load_shapes(count, height, width,
-                          img_floder, mask_floder, imglist, dataset_root_path)
+                          img_floder, imglist, dataset_root_path)
 dataset_train.prepare()
 
 # Validation dataset
 dataset_val = MyDataset()
-dataset_val.load_shapes(count, height, width, img_floder,
-                        mask_floder, imglist, dataset_val_root_path)
+dataset_val.load_shapes(count_val, height, width, img_floder_val,
+                        imglist_val, dataset_val_root_path)
 dataset_val.prepare()
 
 
