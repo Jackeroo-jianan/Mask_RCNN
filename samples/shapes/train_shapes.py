@@ -311,10 +311,9 @@ class MyDataset(utils.Dataset):
 # 基础设置
 parser = argparse.ArgumentParser()
 parser.add_argument('labels_path')
-parser.add_argument('-o', '--out', default=None)
+# parser.add_argument('-o', '--out', default=None)
 args = parser.parse_args()
 
-json_file = args.labels_path
 dataset_root_path = args.labels_path+"labels/mouse/"
 dataset_val_root_path = args.labels_path+"labels/mouse/test/"
 img_floder = dataset_root_path+"rgb"
