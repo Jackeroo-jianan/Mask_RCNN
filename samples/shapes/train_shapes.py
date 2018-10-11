@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import yaml
 import keras
 from PIL import Image
+import argparse
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
@@ -44,7 +45,8 @@ from mrcnn.model import log
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_my.h5")
+COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+# COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
 # Download COCO trained weights from Releases if needed
 # if not os.path.exists(COCO_MODEL_PATH):
 #     utils.download_trained_weights(COCO_MODEL_PATH)
@@ -86,7 +88,7 @@ class ShapesConfig(Config):
     TRAIN_ROIS_PER_IMAGE = 32
 
     # Use a small epoch since the data is simple
-    STEPS_PER_EPOCH = 100
+    STEPS_PER_EPOCH = 500
 
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 5
@@ -129,7 +131,7 @@ def get_ax(rows=1, cols=1, size=8):
 class MyDataset(utils.Dataset):
     """自定义训练集
     """
-    
+
     # def __init__(self):
     #     self.iter_num = 0
 
@@ -148,9 +150,10 @@ class MyDataset(utils.Dataset):
             del labels[0]
         return labels
 
-    def draw_mask(self, num_obj, mask, image):
+    def draw_mask(self, num_obj, mask, image, image_id):
+        # print("image_id:",image_id)
+        # print("self.image_info:",self.image_info)
         info = self.image_info[image_id]
-        # print("image:",image)
         for index in range(num_obj):
             for i in range(info['width']):
                 for j in range(info['height']):
@@ -208,7 +211,7 @@ class MyDataset(utils.Dataset):
     def load_mask(self, image_id):
         """Generate instance masks for shapes of the given image ID.
         """
-        
+
         info = self.image_info[image_id]
         count = 1  # number of object
         img = Image.open(info['mask_path'])
@@ -216,7 +219,7 @@ class MyDataset(utils.Dataset):
         num_obj = self.get_obj_index(img)
         mask = np.zeros(
             [info['height'], info['width'], num_obj], dtype=np.uint8)
-        mask = self.draw_mask(num_obj, mask, img)
+        mask = self.draw_mask(num_obj, mask, img, image_id)
         occlusion = np.logical_not(mask[:, :, -1]).astype(np.uint8)
         for i in range(count - 2, -1, -1):
             mask[:, :, i] = mask[:, :, i] * occlusion
@@ -306,9 +309,14 @@ class MyDataset(utils.Dataset):
 # In[5]:
 
 # 基础设置
-# dataset_root_path="D:/document/Share/labels/mouse/"
-dataset_root_path = "/home/hillsun/hyj/labels/mouse/"
-dataset_val_root_path = "/home/hillsun/hyj/labels/mouse/test/"
+parser = argparse.ArgumentParser()
+parser.add_argument('labels_path')
+parser.add_argument('-o', '--out', default=None)
+args = parser.parse_args()
+
+json_file = args.labels_path
+dataset_root_path = args.labels_path+"labels/mouse/"
+dataset_val_root_path = args.labels_path+"labels/mouse/test/"
 img_floder = dataset_root_path+"rgb"
 img_floder_val = dataset_val_root_path+"rgb"
 # mask_floder = dataset_root_path+"mask"
@@ -369,7 +377,7 @@ elif init_with == "coco":
     # See README for instructions to download the COCO weights
     if os.path.isfile(COCO_MODEL_PATH):
         model.load_weights(COCO_MODEL_PATH, by_name=True,
-                        exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                           exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
                                     "mrcnn_bbox", "mrcnn_mask"])
 elif init_with == "last":
     # Load the last model you trained and continue training
@@ -466,12 +474,14 @@ visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
 
 # In[13]:
 
-
 results = model.detect([original_image], verbose=1)
 
 r = results[0]
+print("识别：", r)
+# visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+#                             dataset_val.class_names, r['scores'], ax=get_ax())
 visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-                            dataset_val.class_names, r['scores'], ax=get_ax())
+                            dataset_val.class_names, r['scores'], figsize=(8, 8))
 
 
 # ## Evaluation
