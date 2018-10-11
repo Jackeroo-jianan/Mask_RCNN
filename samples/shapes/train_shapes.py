@@ -2,11 +2,11 @@
 # coding: utf-8
 
 # # Mask R-CNN - Train on Shapes Dataset
-# 
-# 
+#
+#
 # This notebook shows how to train Mask R-CNN on your own dataset. To keep things simple we use a synthetic dataset of shapes (squares, triangles, and circles) which enables fast training. You'd still need a GPU, though, because the network backbone is a Resnet101, which would be too slow to train on a CPU. On a GPU, you can start to get okay-ish results in a few minutes, and good results in less than an hour.
-# 
-# The code of the *Shapes* dataset is included below. It generates images on the fly, so it doesn't require downloading any data. And it can generate images of any size, so we pick a small image size to train faster. 
+#
+# The code of the *Shapes* dataset is included below. It generates images on the fly, so it doesn't require downloading any data. And it can generate images of any size, so we pick a small image size to train faster.
 
 # In[1]:
 
@@ -44,7 +44,7 @@ from mrcnn.model import log
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_my.h5")
 # Download COCO trained weights from Releases if needed
 if not os.path.exists(COCO_MODEL_PATH):
     utils.download_trained_weights(COCO_MODEL_PATH)
@@ -91,9 +91,10 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 5
 
-    #增加一个全局变量
+    # 增加一个全局变量
     iter_num = 0
-    
+
+
 config = ShapesConfig()
 config.display()
 
@@ -107,7 +108,7 @@ def get_ax(rows=1, cols=1, size=8):
     """Return a Matplotlib Axes array to be used in
     all visualizations in the notebook. Provide a
     central point to control graph sizes.
-    
+
     Change the default size attribute to control the size
     of rendered images
     """
@@ -116,11 +117,11 @@ def get_ax(rows=1, cols=1, size=8):
 
 
 # ## Dataset
-# 
+#
 # Create a synthetic dataset
-# 
+#
 # Extend the Dataset class and add a method to load the shapes dataset, `load_shapes()`, and override the following methods:
-# 
+#
 # * load_image()
 # * load_mask()
 # * image_reference()
@@ -136,14 +137,14 @@ class MyDataset(utils.Dataset):
         """得到该图中有多少个实例（物体）"""
         n = np.max(image)
         return n
-    
-    def from_yaml_get_class(self,image_id):
+
+    def from_yaml_get_class(self, image_id):
         """解析labelme中得到的yaml文件，从而得到mask每一层对应的实例标签
         """
-        info=self.image_info[image_id]
+        info = self.image_info[image_id]
         with open(info['yaml_path']) as f:
-            temp=yaml.load(f.read())
-            labels=temp['label_names']
+            temp = yaml.load(f.read())
+            labels = temp['label_names']
             del labels[0]
         return labels
 
@@ -155,19 +156,19 @@ class MyDataset(utils.Dataset):
                 for j in range(info['height']):
                     at_pixel = image.getpixel((i, j))
                     if at_pixel == index + 1:
-                        mask[j, i, index] =1
+                        mask[j, i, index] = 1
         return mask
 
-    #重新写load_shapes，里面包含自己的自己的类别
-    #并在self.image_info信息中添加了path、mask_path 、yaml_path
-    def load_shapes(self, count, height, width, img_floder, mask_floder, imglist,dataset_root_path):
+    # 重新写load_shapes，里面包含自己的自己的类别
+    # 并在self.image_info信息中添加了path、mask_path 、yaml_path
+    def load_shapes(self, count, height, width, img_floder, mask_floder, imglist, dataset_root_path):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
         """
         # Add classes
         # 分类
-        self.add_class("shapes", 1, "mouse")# 老鼠
+        self.add_class("shapes", 1, "mouse")  # 老鼠
 
         for i in range(count):
             filestr = imglist[i].split(".")[0]
@@ -176,8 +177,7 @@ class MyDataset(utils.Dataset):
             mask_path = dataset_root_path+"json/rgb_"+filestr+"_json/label.png"
             yaml_path = dataset_root_path+"json/rgb_"+filestr+"_json/info.yaml"
             self.add_image("shapes", image_id=i, path=img_floder + "/" + imglist[i],
-                           width=width, height=height, mask_path=mask_path,yaml_path=yaml_path)
-
+                           width=width, height=height, mask_path=mask_path, yaml_path=yaml_path)
 
     def load_image(self, image_id):
         """Generate an image from the specs of the given image ID.
@@ -192,7 +192,8 @@ class MyDataset(utils.Dataset):
         # image = image * bg_color.astype(np.uint8)
         # for shape, color, dims in info['shapes']:
         #     image = self.draw_shape(image, shape, dims, color)
-        image = keras.preprocessing.image.load_img(info["path"],target_size=(info['height'], info['width']))
+        image = keras.preprocessing.image.load_img(
+            info["path"], target_size=(info['height'], info['width']))
         image = keras.preprocessing.image.img_to_array(image)
         return image
 
@@ -213,18 +214,20 @@ class MyDataset(utils.Dataset):
         img = Image.open(info['mask_path'])
         img = img.resize((info['width'], info['height']))
         num_obj = self.get_obj_index(img)
-        mask = np.zeros([info['height'], info['width'], num_obj], dtype=np.uint8)
+        mask = np.zeros(
+            [info['height'], info['width'], num_obj], dtype=np.uint8)
         mask = self.draw_mask(num_obj, mask, img)
         occlusion = np.logical_not(mask[:, :, -1]).astype(np.uint8)
         for i in range(count - 2, -1, -1):
             mask[:, :, i] = mask[:, :, i] * occlusion
-            occlusion = np.logical_and(occlusion, np.logical_not(mask[:, :, i]))
-        labels=[]
-        labels=self.from_yaml_get_class(image_id)
-        labels_form=[]
+            occlusion = np.logical_and(
+                occlusion, np.logical_not(mask[:, :, i]))
+        labels = []
+        labels = self.from_yaml_get_class(image_id)
+        labels_form = []
         for i in range(len(labels)):
-            if labels[i].find("mouse")!=-1:
-                #print "mouse"
+            if labels[i].find("mouse") != -1:
+                # print "mouse"
                 labels_form.append("mouse")
             # elif labels[i].find("column")!=-1:
             #     #print "column"
@@ -294,15 +297,18 @@ class MyDataset(utils.Dataset):
             boxes.append([y-s, x-s, y+s, x+s])
         # Apply non-max suppression wit 0.3 threshold to avoid
         # shapes covering each other
-        keep_ixs = utils.non_max_suppression(np.array(boxes), np.arange(N), 0.3)
+        keep_ixs = utils.non_max_suppression(
+            np.array(boxes), np.arange(N), 0.3)
         shapes = [s for i, s in enumerate(shapes) if i in keep_ixs]
         return bg_color, shapes
 
 
 # In[5]:
 
-#基础设置
-dataset_root_path="D:/document/Share/labels/mouse/"
+# 基础设置
+# dataset_root_path="D:/document/Share/labels/mouse/"
+dataset_root_path = "/home/hillsun/hyj/labels/mouse/"
+dataset_val_root_path = "/home/hillsun/hyj/labels/mouse/test/"
 img_floder = dataset_root_path+"rgb"
 mask_floder = dataset_root_path+"mask"
 #yaml_floder = dataset_root_path
@@ -313,12 +319,14 @@ height = 800
 
 # Training dataset
 dataset_train = MyDataset()
-dataset_train.load_shapes(count, height, width, img_floder, mask_floder, imglist,dataset_root_path)
+dataset_train.load_shapes(count, height, width,
+                          img_floder, mask_floder, imglist, dataset_root_path)
 dataset_train.prepare()
 
 # Validation dataset
 dataset_val = MyDataset()
-dataset_val.load_shapes(count, height, width, img_floder, mask_floder, imglist,dataset_root_path)
+dataset_val.load_shapes(count, height, width, img_floder,
+                        mask_floder, imglist, dataset_val_root_path)
 dataset_val.prepare()
 
 
@@ -330,7 +338,8 @@ image_ids = np.random.choice(dataset_train.image_ids, 4)
 for image_id in image_ids:
     image = dataset_train.load_image(image_id)
     mask, class_ids = dataset_train.load_mask(image_id)
-    visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
+    visualize.display_top_masks(
+        image, mask, class_ids, dataset_train.class_names)
 
 
 # ## Ceate Model
@@ -355,19 +364,20 @@ elif init_with == "coco":
     # Load weights trained on MS COCO, but skip layers that
     # are different due to the different number of classes
     # See README for instructions to download the COCO weights
-    model.load_weights(COCO_MODEL_PATH, by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", 
-                                "mrcnn_bbox", "mrcnn_mask"])
+    if os.path.isfile(COCO_MODEL_PATH):
+        model.load_weights(COCO_MODEL_PATH, by_name=True,
+                        exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                                    "mrcnn_bbox", "mrcnn_mask"])
 elif init_with == "last":
     # Load the last model you trained and continue training
     model.load_weights(model.find_last(), by_name=True)
 
 
 # ## Training
-# 
+#
 # Train in two stages:
 # 1. Only the heads. Here we're freezing all the backbone layers and training only the randomly initialized layers (i.e. the ones that we didn't use pre-trained weights from MS COCO). To train only the head layers, pass `layers='heads'` to the `train()` function.
-# 
+#
 # 2. Fine-tune all layers. For this simple example it's not necessary, but we're including it to show the process. Simply pass `layers="all` to train all layers.
 
 # In[8]:
@@ -377,9 +387,9 @@ elif init_with == "last":
 # Passing layers="heads" freezes all layers except the head
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
-model.train(dataset_train, dataset_val, 
-            learning_rate=config.LEARNING_RATE, 
-            epochs=1, 
+model.train(dataset_train, dataset_val,
+            learning_rate=config.LEARNING_RATE,
+            epochs=1,
             layers='heads')
 
 
@@ -387,12 +397,12 @@ model.train(dataset_train, dataset_val,
 
 
 # Fine tune all layers
-# Passing layers="all" trains all layers. You can also 
+# Passing layers="all" trains all layers. You can also
 # pass a regular expression to select which layers to
 # train by name pattern.
-model.train(dataset_train, dataset_val, 
+model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE / 10,
-            epochs=2, 
+            epochs=2,
             layers="all")
 
 
@@ -415,10 +425,11 @@ class InferenceConfig(ShapesConfig):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
 
+
 inference_config = InferenceConfig()
 
 # Recreate the model in inference mode
-model = modellib.MaskRCNN(mode="inference", 
+model = modellib.MaskRCNN(mode="inference",
                           config=inference_config,
                           model_dir=MODEL_DIR)
 
@@ -437,8 +448,8 @@ model.load_weights(model_path, by_name=True)
 
 # Test on a random image
 image_id = random.choice(dataset_val.image_ids)
-original_image, image_meta, gt_class_id, gt_bbox, gt_mask =    modellib.load_image_gt(dataset_val, inference_config, 
-                           image_id, use_mini_mask=False)
+original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
+                                                                                   image_id, use_mini_mask=False)
 
 log("original_image", original_image)
 log("image_meta", image_meta)
@@ -446,7 +457,7 @@ log("gt_class_id", gt_class_id)
 log("gt_bbox", gt_bbox)
 log("gt_mask", gt_mask)
 
-visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id, 
+visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
                             dataset_train.class_names, figsize=(8, 8))
 
 
@@ -456,7 +467,7 @@ visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
 results = model.detect([original_image], verbose=1)
 
 r = results[0]
-visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'], 
+visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
                             dataset_val.class_names, r['scores'], ax=get_ax())
 
 
@@ -471,16 +482,16 @@ image_ids = np.random.choice(dataset_val.image_ids, 10)
 APs = []
 for image_id in image_ids:
     # Load image and ground truth data
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =        modellib.load_image_gt(dataset_val, inference_config,
-                               image_id, use_mini_mask=False)
-    molded_images = np.expand_dims(modellib.mold_image(image, inference_config), 0)
+    image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
+                                                                              image_id, use_mini_mask=False)
+    molded_images = np.expand_dims(
+        modellib.mold_image(image, inference_config), 0)
     # Run object detection
     results = model.detect([image], verbose=0)
     r = results[0]
     # Compute AP
-    AP, precisions, recalls, overlaps =        utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
-                         r["rois"], r["class_ids"], r["scores"], r['masks'])
+    AP, precisions, recalls, overlaps = utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
+                                                         r["rois"], r["class_ids"], r["scores"], r['masks'])
     APs.append(AP)
-    
-print("mAP: ", np.mean(APs))
 
+print("mAP: ", np.mean(APs))
