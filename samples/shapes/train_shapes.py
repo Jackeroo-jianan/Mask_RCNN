@@ -76,8 +76,8 @@ class ShapesConfig(Config):
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
-    IMAGE_MIN_DIM = 800
-    IMAGE_MAX_DIM = 1280
+    IMAGE_MIN_DIM = 1080
+    IMAGE_MAX_DIM = 1920
 
     # Use smaller anchors because our image and objects are small
     # 控制识别图片的大小
@@ -244,67 +244,6 @@ class MyDataset(utils.Dataset):
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)
 
-    def draw_shape(self, image, shape, dims, color):
-        """Draws a shape from the given specs."""
-        # Get the center x, y and the size s
-        x, y, s = dims
-        if shape == 'square':
-            cv2.rectangle(image, (x-s, y-s), (x+s, y+s), color, -1)
-        elif shape == "circle":
-            cv2.circle(image, (x, y), s, color, -1)
-        elif shape == "triangle":
-            points = np.array([[(x, y-s),
-                                (x-s/math.sin(math.radians(60)), y+s),
-                                (x+s/math.sin(math.radians(60)), y+s),
-                                ]], dtype=np.int32)
-            cv2.fillPoly(image, points, color)
-        return image
-
-    def random_shape(self, height, width):
-        """Generates specifications of a random shape that lies within
-        the given height and width boundaries.
-        Returns a tuple of three valus:
-        * The shape name (square, circle, ...)
-        * Shape color: a tuple of 3 values, RGB.
-        * Shape dimensions: A tuple of values that define the shape size
-                            and location. Differs per shape type.
-        """
-        # Shape
-        shape = random.choice(["square", "circle", "triangle"])
-        # Color
-        color = tuple([random.randint(0, 255) for _ in range(3)])
-        # Center x, y
-        buffer = 20
-        y = random.randint(buffer, height - buffer - 1)
-        x = random.randint(buffer, width - buffer - 1)
-        # Size
-        s = random.randint(buffer, height//4)
-        return shape, color, (x, y, s)
-
-    def random_image(self, height, width):
-        """Creates random specifications of an image with multiple shapes.
-        Returns the background color of the image and a list of shape
-        specifications that can be used to draw the image.
-        """
-        # Pick random background color
-        bg_color = np.array([random.randint(0, 255) for _ in range(3)])
-        # Generate a few random shapes and record their
-        # bounding boxes
-        shapes = []
-        boxes = []
-        N = random.randint(1, 4)
-        for _ in range(N):
-            shape, color, dims = self.random_shape(height, width)
-            shapes.append((shape, color, dims))
-            x, y, s = dims
-            boxes.append([y-s, x-s, y+s, x+s])
-        # Apply non-max suppression wit 0.3 threshold to avoid
-        # shapes covering each other
-        keep_ixs = utils.non_max_suppression(
-            np.array(boxes), np.arange(N), 0.3)
-        shapes = [s for i, s in enumerate(shapes) if i in keep_ixs]
-        return bg_color, shapes
-
 
 # In[5]:
 
@@ -324,8 +263,10 @@ imglist = os.listdir(img_floder)
 imglist_val = os.listdir(img_floder_val)
 count = len(imglist)
 count_val = len(imglist_val)
-width = 1280
-height = 800
+width = config.IMAGE_MAX_DIM
+height = config.IMAGE_MIN_DIM
+print("width",width)
+print("height",height)
 
 # Training dataset
 dataset_train = MyDataset()
@@ -457,30 +398,31 @@ model.load_weights(model_path, by_name=True)
 
 
 # Test on a random image
-image_id = random.choice(dataset_val.image_ids)
-original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
-                                                                                   image_id, use_mini_mask=False)
+for image_id in dataset_val.image_ids:
+    # image_id = random.choice(dataset_val.image_ids)
+    original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
+                                                                                    image_id, use_mini_mask=False)
 
-log("original_image", original_image)
-log("image_meta", image_meta)
-log("gt_class_id", gt_class_id)
-log("gt_bbox", gt_bbox)
-log("gt_mask", gt_mask)
+    log("original_image", original_image)
+    log("image_meta", image_meta)
+    log("gt_class_id", gt_class_id)
+    log("gt_bbox", gt_bbox)
+    log("gt_mask", gt_mask)
 
-visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
-                            dataset_train.class_names, figsize=(8, 8))
+    # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
+    #                             dataset_train.class_names, figsize=(8, 8))
 
 
-# In[13]:
+    # In[13]:
 
-results = model.detect([original_image], verbose=1)
+    results = model.detect([original_image], verbose=1)
 
-r = results[0]
-print("识别：", r)
-# visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-#                             dataset_val.class_names, r['scores'], ax=get_ax())
-visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
-                            dataset_val.class_names, r['scores'], figsize=(8, 8))
+    r = results[0]
+    print("识别：", r)
+    # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+    #                             dataset_val.class_names, r['scores'], ax=get_ax())
+    visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
+                                dataset_val.class_names, r['scores'], figsize=(8, 8))
 
 
 # ## Evaluation
