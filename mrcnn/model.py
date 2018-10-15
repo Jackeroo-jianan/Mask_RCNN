@@ -1956,7 +1956,7 @@ class MaskRCNN():
             KL.UpSampling2D(size=(2, 2), name="fpn_p3upsampled")(P3),
             KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (1, 1), name='fpn_c2p2')(C2)])
         # Attach 3x3 conv to all P layers to get the final feature maps.
-        # 向下卷积合并
+        # 经过一个(3,3)卷积
         P2 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3),
                        padding="SAME", name="fpn_p2")(P2)
         P3 = KL.Conv2D(config.TOP_DOWN_PYRAMID_SIZE, (3, 3),
@@ -1977,7 +1977,7 @@ class MaskRCNN():
         mrcnn_feature_maps = [P2, P3, P4, P5]
 
         # Anchors
-        # 描点
+        # 描点,预选框，5种大小，3种形状，
         if mode == "training":
             anchors = self.get_anchors(config.IMAGE_SHAPE)
             # Duplicate across the batch dimension because Keras requires it
