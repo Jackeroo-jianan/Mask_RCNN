@@ -76,8 +76,8 @@ class ShapesConfig(Config):
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
-    IMAGE_MIN_DIM = 1080
-    IMAGE_MAX_DIM = 1920
+    IMAGE_MIN_DIM = 800
+    IMAGE_MAX_DIM = 1280
 
     # Use smaller anchors because our image and objects are small
     # 控制识别图片的大小
@@ -92,6 +92,7 @@ class ShapesConfig(Config):
 
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
+
 
 
 config = ShapesConfig()
@@ -211,7 +212,6 @@ class MyDataset(utils.Dataset):
     def load_mask(self, image_id):
         """Generate instance masks for shapes of the given image ID.
         """
-
         info = self.image_info[image_id]
         count = 1  # number of object
         img = Image.open(info['mask_path'])
@@ -253,8 +253,8 @@ parser.add_argument('labels_path')
 # parser.add_argument('-o', '--out', default=None)
 args = parser.parse_args()
 
-dataset_root_path = args.labels_path+"labels/mouse/"
-dataset_val_root_path = args.labels_path+"labels/mouse/test/"
+dataset_root_path = args.labels_path + "labels/mouse/"
+dataset_val_root_path = args.labels_path + "labels/mouse/test/"
 img_floder = dataset_root_path+"rgb"
 img_floder_val = dataset_val_root_path+"rgb"
 # mask_floder = dataset_root_path+"mask"
@@ -265,8 +265,8 @@ count = len(imglist)
 count_val = len(imglist_val)
 width = config.IMAGE_MAX_DIM
 height = config.IMAGE_MIN_DIM
-print("width",width)
-print("height",height)
+print("width", width)
+print("height", height)
 
 # Training dataset
 dataset_train = MyDataset()
@@ -401,7 +401,7 @@ model.load_weights(model_path, by_name=True)
 for image_id in dataset_val.image_ids:
     # image_id = random.choice(dataset_val.image_ids)
     original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
-                                                                                    image_id, use_mini_mask=False)
+                                                                                       image_id, use_mini_mask=False)
 
     log("original_image", original_image)
     log("image_meta", image_meta)
@@ -412,13 +412,12 @@ for image_id in dataset_val.image_ids:
     # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
     #                             dataset_train.class_names, figsize=(8, 8))
 
-
     # In[13]:
 
     results = model.detect([original_image], verbose=1)
 
     r = results[0]
-    print("识别：", r)
+    # print("识别：", r)
     # visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
     #                             dataset_val.class_names, r['scores'], ax=get_ax())
     visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'],
