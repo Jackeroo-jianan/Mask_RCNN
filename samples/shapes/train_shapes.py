@@ -180,7 +180,7 @@ class MyDataset(utils.Dataset):
         self.add_class("shapes", 10, "x")
 
         for i in range(count):
-            if os.path.isfile(imglist[i]):
+            if os.path.isfile(os.path.join(img_floder, imglist[i])):
                 filestr = imglist[i].split(".")[0]
                 # filestr = filestr.split("_")[1]
                 # mask_path = mask_floder + "/" + filestr + ".png"
