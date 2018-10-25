@@ -302,19 +302,27 @@ class Dataset(object):
             return ",".join(name.split(",")[:1])
 
         # Build (or rebuild) everything else from the info dicts.
+        # 分类数
         self.num_classes = len(self.class_info)
+        # 生成类别ID
         self.class_ids = np.arange(self.num_classes)
+        # 类别名称
         self.class_names = [clean_name(c["name"]) for c in self.class_info]
+        # 图片数量
         self.num_images = len(self.image_info)
+        # 图片ID
         self._image_ids = np.arange(self.num_images)
 
         # Mapping from source class and image IDs to internal IDs
+        # ID.名称 映射表
         self.class_from_source_map = {"{}.{}".format(info['source'], info['id']): id
                                       for info, id in zip(self.class_info, self.class_ids)}
+        # ID.图片路径 映射表
         self.image_from_source_map = {"{}.{}".format(info['source'], info['id']): id
                                       for info, id in zip(self.image_info, self.image_ids)}
 
         # Map sources to class_ids they support
+        # 按类型大类细分ID
         self.sources = list(set([i['source'] for i in self.class_info]))
         self.source_class_ids = {}
         # Loop over datasets

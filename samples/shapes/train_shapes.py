@@ -72,7 +72,7 @@ class ShapesConfig(Config):
 
     # Number of classes (including background)
     # 分类数量
-    NUM_CLASSES = 1 + 1  # background + 1 shapes
+    NUM_CLASSES = 1 + 11  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
@@ -92,7 +92,6 @@ class ShapesConfig(Config):
 
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
-
 
 
 config = ShapesConfig()
@@ -136,11 +135,6 @@ class MyDataset(utils.Dataset):
     # def __init__(self):
     #     self.iter_num = 0
 
-    def get_obj_index(self, image):
-        """得到该图中有多少个实例（物体）"""
-        n = np.max(image)
-        return n
-
     def from_yaml_get_class(self, image_id):
         """解析labelme中得到的yaml文件，从而得到mask每一层对应的实例标签
         """
@@ -152,6 +146,7 @@ class MyDataset(utils.Dataset):
         return labels
 
     def draw_mask(self, num_obj, mask, image, image_id):
+        """生成mask,通过不同的颜色索引"""
         # print("image_id:",image_id)
         # print("self.image_info:",self.image_info)
         info = self.image_info[image_id]
@@ -164,30 +159,44 @@ class MyDataset(utils.Dataset):
         return mask
 
     # 重新写load_shapes，里面包含自己的自己的类别
-    # 并在self.image_info信息中添加了path、mask_path 、yaml_path
-    def load_shapes(self, count, height, width, img_floder, imglist, dataset_root_path):
+    # 并在self.image_info信息中添加了mask_path 、yaml_path
+    def load_shapes(self, count, height, width, img_floder, imglist):
         """Generate the requested number of synthetic images.
         count: number of images to generate.
         height, width: the size of the generated images.
         """
         # Add classes
         # 分类
-        self.add_class("shapes", 1, "mouse")  # 老鼠
+        self.add_class("shapes", 0, "0")
+        self.add_class("shapes", 1, "1")
+        self.add_class("shapes", 2, "2")
+        self.add_class("shapes", 3, "3")
+        self.add_class("shapes", 4, "4")
+        self.add_class("shapes", 5, "5")
+        self.add_class("shapes", 6, "6")
+        self.add_class("shapes", 7, "7")
+        self.add_class("shapes", 8, "8")
+        self.add_class("shapes", 9, "9")
+        self.add_class("shapes", 10, "x")
 
         for i in range(count):
-            filestr = imglist[i].split(".")[0]
-            filestr = filestr.split("_")[1]
-            # mask_path = mask_floder + "/" + filestr + ".png"
-            mask_path = dataset_root_path+"json/rgb_"+filestr+"_json/label.png"
-            yaml_path = dataset_root_path+"json/rgb_"+filestr+"_json/info.yaml"
-            self.add_image("shapes", image_id=i, path=img_floder + "/" + imglist[i],
-                           width=width, height=height, mask_path=mask_path, yaml_path=yaml_path)
+            if os.path.isfile(imglist[i]):
+                filestr = imglist[i].split(".")[0]
+                # filestr = filestr.split("_")[1]
+                # mask_path = mask_floder + "/" + filestr + ".png"
+                mask_path = os.path.join(
+                    img_floder, "json/"+filestr+"_json/label.png")
+                yaml_path = os.path.join(
+                    img_floder, "json/"+filestr+"_json/info.yaml")
+                self.add_image("shapes", image_id=i, path=img_floder + "/" + imglist[i],
+                               width=width, height=height, mask_path=mask_path, yaml_path=yaml_path)
 
     def load_image(self, image_id):
         """Generate an image from the specs of the given image ID.
         Typically this function loads the image from a file, but
         in this case it generates the image on the fly from the
         specs in image_info.
+        通过ID读图片
         """
         info = self.image_info[image_id]
         # print("info:",info)
@@ -201,46 +210,61 @@ class MyDataset(utils.Dataset):
         image = keras.preprocessing.image.img_to_array(image)
         return image
 
-    def image_reference(self, image_id):
-        """Return the shapes data of the image."""
-        info = self.image_info[image_id]
-        if info["source"] == "shapes":
-            return info["shapes"]
-        else:
-            super(self.__class__).image_reference(self, image_id)
-
     def load_mask(self, image_id):
         """Generate instance masks for shapes of the given image ID.
         """
+        # ID对应的图片信息
         info = self.image_info[image_id]
         count = 1  # number of object
+        # 通过路径打开图片
         img = Image.open(info['mask_path'])
+        # 图片大小resize成固定大小
         img = img.resize((info['width'], info['height']))
-        num_obj = self.get_obj_index(img)
+        # 获得物体数量,图片是P模式，里面的值是颜色表的索引，范围0-255。所以np.max(img)能拿到物体数量
+        # print("load_mask img",np.array(img))
+        num_obj = np.max(img)
+        # print("load_mask num_obj",num_obj)
+        # 初始化mask矩阵
         mask = np.zeros(
             [info['height'], info['width'], num_obj], dtype=np.uint8)
+        # 画mask图
         mask = self.draw_mask(num_obj, mask, img, image_id)
+        # 取最后一个mask做逻辑非运算
         occlusion = np.logical_not(mask[:, :, -1]).astype(np.uint8)
+        # 数量大于等于2时，倒序循环遍历（该循环好像没意义）
         for i in range(count - 2, -1, -1):
+            # 求交集
             mask[:, :, i] = mask[:, :, i] * occlusion
+            # 做非运算，在于上一次结果做并运算，与上面的结果完全一样
             occlusion = np.logical_and(
                 occlusion, np.logical_not(mask[:, :, i]))
         labels = []
         labels = self.from_yaml_get_class(image_id)
         labels_form = []
         for i in range(len(labels)):
-            if labels[i].find("mouse") != -1:
-                # print "mouse"
-                labels_form.append("mouse")
-            # elif labels[i].find("column")!=-1:
-            #     #print "column"
-            #     labels_form.append("column")
-            # elif labels[i].find("package")!=-1:
-            #     #print "package"
-            #     labels_form.append("package")
-            # elif labels[i].find("fruit")!=-1:
-            #     #print "fruit"
-            #     labels_form.append("fruit")
+            if labels[i].find("0") == 0:
+                labels_form.append("0")
+            elif labels[i].find("1") == 0:
+                labels_form.append("1")
+            elif labels[i].find("2") == 0:
+                labels_form.append("2")
+            elif labels[i].find("3") == 0:
+                labels_form.append("3")
+            elif labels[i].find("4") == 0:
+                labels_form.append("4")
+            elif labels[i].find("5") == 0:
+                labels_form.append("5")
+            elif labels[i].find("6") == 0:
+                labels_form.append("6")
+            elif labels[i].find("7") == 0:
+                labels_form.append("7")
+            elif labels[i].find("8") == 0:
+                labels_form.append("8")
+            elif labels[i].find("9") == 0:
+                labels_form.append("9")
+            elif labels[i].find("x") == 0:
+                labels_form.append("x")
+        # 种类对应的序号
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)
 
@@ -253,13 +277,14 @@ parser.add_argument('labels_path')
 # parser.add_argument('-o', '--out', default=None)
 args = parser.parse_args()
 
-dataset_root_path = args.labels_path + "labels/mouse/"
-dataset_val_root_path = args.labels_path + "labels/mouse/test/"
-img_floder = dataset_root_path+"rgb"
-img_floder_val = dataset_val_root_path+"rgb"
+dataset_root_path = args.labels_path
+img_floder = os.path.join(dataset_root_path, "train")
+img_floder_val = os.path.join(dataset_root_path, "test")
 # mask_floder = dataset_root_path+"mask"
 #yaml_floder = dataset_root_path
+# 训练图片列表
 imglist = os.listdir(img_floder)
+# 识别图片列表
 imglist_val = os.listdir(img_floder_val)
 count = len(imglist)
 count_val = len(imglist_val)
@@ -268,16 +293,16 @@ height = config.IMAGE_MIN_DIM
 print("width", width)
 print("height", height)
 
-# Training dataset
+# Training dataset 训练数据集
 dataset_train = MyDataset()
 dataset_train.load_shapes(count, height, width,
-                          img_floder, imglist, dataset_root_path)
+                          img_floder, imglist)
 dataset_train.prepare()
 
-# Validation dataset
+# Validation dataset 识别数据集
 dataset_val = MyDataset()
 dataset_val.load_shapes(count_val, height, width, img_floder_val,
-                        imglist_val, dataset_val_root_path)
+                        imglist_val)
 dataset_val.prepare()
 
 
