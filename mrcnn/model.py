@@ -2396,6 +2396,7 @@ class MaskRCNN():
             layers = layer_regex[layers]
 
         # Data generators
+        # 数据生成器
         train_generator = data_generator(train_dataset, self.config, shuffle=True,
                                          augmentation=augmentation,
                                          batch_size=self.config.BATCH_SIZE,
@@ -2404,10 +2405,12 @@ class MaskRCNN():
                                        batch_size=self.config.BATCH_SIZE)
 
         # Create log_dir if it does not exist
+        # 创建log文件夹
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
         # Callbacks
+        # 创建回调，记录TensorBoard和存储点
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
@@ -2416,12 +2419,15 @@ class MaskRCNN():
         ]
 
         # Add custom callbacks to the list
+        # 自定义回调
         if custom_callbacks:
             callbacks += custom_callbacks
 
         # Train
+        # 开始训练
         log("\nStarting at epoch {}. LR={}\n".format(self.epoch, learning_rate))
         log("Checkpoint Path: {}".format(self.checkpoint_path))
+        # 锁定特定层的权重
         self.set_trainable(layers)
         self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 
