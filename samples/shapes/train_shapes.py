@@ -316,7 +316,7 @@ image_ids = np.random.choice(dataset_train.image_ids, 4)
 for image_id in image_ids:
     image = dataset_train.load_image(image_id)
     mask, class_ids = dataset_train.load_mask(image_id)
-    print("mask",mask.shape)
+    print("mask", mask.shape)
     # print("class_ids",class_ids)
     visualize.display_top_masks(
         image, mask, class_ids, dataset_train.class_names)
@@ -346,9 +346,10 @@ elif init_with == "coco":
     # See README for instructions to download the COCO weights
     if os.path.isfile(COCO_MODEL_PATH):
         print("加载模型：", COCO_MODEL_PATH)
-        model.load_weights(COCO_MODEL_PATH, by_name=True,
-                           exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
-                                    "mrcnn_bbox", "mrcnn_mask"])
+        # model.load_weights(COCO_MODEL_PATH, by_name=True,
+        #                    exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+        #                             "mrcnn_bbox", "mrcnn_mask"])
+        model.load_weights(COCO_MODEL_PATH, by_name=True)
 elif init_with == "last":
     # Load the last model you trained and continue training
     model.load_weights(model.find_last(), by_name=True)
