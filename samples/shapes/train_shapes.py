@@ -369,10 +369,11 @@ elif init_with == "last":
 # Passing layers="heads" freezes all layers except the head
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE,
-            epochs=1,
-            layers='heads')
+# 锁定resnet部分权重，在预训练完时使用
+# model.train(dataset_train, dataset_val,
+#             learning_rate=config.LEARNING_RATE,
+#             epochs=1,
+#             layers='heads')
 
 
 # In[9]:
