@@ -375,6 +375,7 @@ class PyramidROIAlign(KE.Layer):
     Pooled regions in the shape: [batch, num_boxes, pool_height, pool_width, channels].
     The width and height are those specific in the pool_shape in the layer
     constructor.
+    ROIAlign层
     """
 
     def __init__(self, pool_shape, **kwargs):
@@ -383,14 +384,17 @@ class PyramidROIAlign(KE.Layer):
 
     def call(self, inputs):
         # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords
+        # 每张图片的所有候选框
         boxes = inputs[0]
 
         # Image meta
         # Holds details about the image. See compose_image_meta()
+        # 原图信息
         image_meta = inputs[1]
 
         # Feature Maps. List of feature maps from different level of the
         # feature pyramid. Each is [batch, height, width, channels]
+        # 多层特征图
         feature_maps = inputs[2:]
 
         # Assign each ROI to a level in the pyramid based on the ROI area.
@@ -398,14 +402,16 @@ class PyramidROIAlign(KE.Layer):
         h = y2 - y1
         w = x2 - x1
         # Use shape of first image. Images in a batch must have the same size.
+        # 获取第一张图片大小，每一批大小要一致
         image_shape = parse_image_meta_graph(image_meta)['image_shape'][0]
         # Equation 1 in the Feature Pyramid Networks paper. Account for
         # the fact that our coordinates are normalized here.
         # e.g. a 224x224 ROI (in pixels) maps to P4
+        # int转成float32格式
         image_area = tf.cast(image_shape[0] * image_shape[1], tf.float32)
+
         roi_level = log2_graph(tf.sqrt(h * w) / (224.0 / tf.sqrt(image_area)))
-        roi_level = tf.minimum(5, tf.maximum(
-            2, 4 + tf.cast(tf.round(roi_level), tf.int32)))
+        roi_level = tf.minimum(5, tf.maximum(2, 4 + tf.cast(tf.round(roi_level), tf.int32)))
         roi_level = tf.squeeze(roi_level, 2)
 
         # Loop through levels and apply ROI pooling to each. P2 to P5.
@@ -434,6 +440,7 @@ class PyramidROIAlign(KE.Layer):
             # Here we use the simplified approach of a single value per bin,
             # which is how it's done in tf.crop_and_resize()
             # Result: [batch * num_boxes, pool_height, pool_width, channels]
+            # 特征裁剪并调整大小
             pooled.append(tf.image.crop_and_resize(
                 feature_maps[i], level_boxes, box_indices, self.pool_shape,
                 method="bilinear"))
@@ -947,7 +954,7 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
         probs: [batch, num_rois, NUM_CLASSES] classifier probabilities
         bbox_deltas: [batch, num_rois, NUM_CLASSES, (dy, dx, log(dh), log(dw))] Deltas to apply to
                      proposal boxes
-    ROI Pooling不同大小到特征图缩放到特定大小
+    ROI Pooling不同大小的特征图缩放到特定大小
     然后做分类，并推测框内真实物体到位置，用于修正框到位置
     """
     # ROI Pooling
@@ -1005,7 +1012,7 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
     """
     # ROI Pooling
     # Shape: [batch, num_rois, MASK_POOL_SIZE, MASK_POOL_SIZE, channels]
-    # 提取固定大小的特征值
+    # 提取固定大小的特征值，(14,14)
     x = PyramidROIAlign([pool_size, pool_size],
                         name="roi_align_mask")([rois, image_meta] + feature_maps)
 
@@ -1037,7 +1044,7 @@ def build_fpn_mask_graph(rois, feature_maps, image_meta,
     # 反向卷积，大小扩大一倍
     x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
                            name="mrcnn_mask_deconv")(x)
-    # (1,1)卷积提取特征，sigmoid激活函数，值范围转到0-1
+    # (1,1)卷积提取特征，sigmoid激活函数，值范围转到0-1，(28*28)
     x = KL.TimeDistributed(KL.Conv2D(num_classes, (1, 1), strides=1, activation="sigmoid"),
                            name="mrcnn_mask")(x)
     return x
@@ -2807,15 +2814,15 @@ def compose_image_meta(image_id, original_image_shape, image_shape,
                        window, scale, active_class_ids):
     """Takes attributes of an image and puts them in one 1D array.
 
-    image_id: An int ID of the image. Useful for debugging.
-    original_image_shape: [H, W, C] before resizing or padding.
-    image_shape: [H, W, C] after resizing and padding
+    image_id: An int ID of the image. Useful for debugging. 图片ID
+    original_image_shape: [H, W, C] before resizing or padding. 原图尺寸
+    image_shape: [H, W, C] after resizing and padding 改变大小并填充后的图片尺寸
     window: (y1, x1, y2, x2) in pixels. The area of the image where the real
-            image is (excluding the padding)
-    scale: The scaling factor applied to the original image (float32)
+            image is (excluding the padding) 不包含填充的原图位置
+    scale: The scaling factor applied to the original image (float32) 缩放比例
     active_class_ids: List of class_ids available in the dataset from which
         the image came. Useful if training on images from multiple datasets
-        where not all classes are present in all datasets.
+        where not all classes are present in all datasets.分类ID列表
     """
     meta = np.array(
         [image_id] +                  # size=1
@@ -2862,11 +2869,17 @@ def parse_image_meta_graph(meta):
     Returns a dict of the parsed tensors.
     解析并分割图片信息
     """
+    # 图片id
     image_id = meta[:, 0]
+    # 原图shape(w,h,c)
     original_image_shape = meta[:, 1:4]
+    # resize并填充后的图shape(w,h,c)
     image_shape = meta[:, 4:7]
+    # 真实图片的框，不含填充
     window = meta[:, 7:11]  # (y1, x1, y2, x2) window of image in in pixels
+    # 缩放倍率
     scale = meta[:, 11]
+    # 分类ID列表
     active_class_ids = meta[:, 12:]
     return {
         "image_id": image_id,

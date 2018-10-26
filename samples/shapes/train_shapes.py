@@ -93,6 +93,8 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
 
+    BACKBONE = "resnet50"
+
 
 config = ShapesConfig()
 config.display()
@@ -103,16 +105,16 @@ config.display()
 # In[3]:
 
 
-def get_ax(rows=1, cols=1, size=8):
-    """Return a Matplotlib Axes array to be used in
-    all visualizations in the notebook. Provide a
-    central point to control graph sizes.
+# def get_ax(rows=1, cols=1, size=8):
+#     """Return a Matplotlib Axes array to be used in
+#     all visualizations in the notebook. Provide a
+#     central point to control graph sizes.
 
-    Change the default size attribute to control the size
-    of rendered images
-    """
-    _, ax = plt.subplots(rows, cols, figsize=(size*cols, size*rows))
-    return ax
+#     Change the default size attribute to control the size
+#     of rendered images
+#     """
+#     _, ax = plt.subplots(rows, cols, figsize=(size*cols, size*rows))
+#     return ax
 
 
 # ## Dataset
@@ -314,6 +316,8 @@ image_ids = np.random.choice(dataset_train.image_ids, 4)
 for image_id in image_ids:
     image = dataset_train.load_image(image_id)
     mask, class_ids = dataset_train.load_mask(image_id)
+    print("mask",mask.shape)
+    # print("class_ids",class_ids)
     visualize.display_top_masks(
         image, mask, class_ids, dataset_train.class_names)
 
@@ -341,6 +345,7 @@ elif init_with == "coco":
     # are different due to the different number of classes
     # See README for instructions to download the COCO weights
     if os.path.isfile(COCO_MODEL_PATH):
+        print("加载模型：", COCO_MODEL_PATH)
         model.load_weights(COCO_MODEL_PATH, by_name=True,
                            exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
                                     "mrcnn_bbox", "mrcnn_mask"])
