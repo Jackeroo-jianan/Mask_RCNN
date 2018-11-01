@@ -528,14 +528,17 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     Note: Returned arrays might be zero padded if not enough target ROIs.
     """
     # Assertions
+    # 判断proposals数量是否大于0，否则报错
     asserts = [
         tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
                   name="roi_assertion"),
     ]
     with tf.control_dependencies(asserts):
+        # tf.identity常量
         proposals = tf.identity(proposals)
 
     # Remove zero padding
+    # 去掉0像素的框
     proposals, _ = trim_zeros_graph(proposals, name="trim_proposals")
     gt_boxes, non_zeros = trim_zeros_graph(gt_boxes, name="trim_gt_boxes")
     gt_class_ids = tf.boolean_mask(gt_class_ids, non_zeros,
@@ -546,6 +549,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
     # them from training. A crowd box is given a negative class ID.
+    # tf.gather通过下标找到对应项
     crowd_ix = tf.where(gt_class_ids < 0)[:, 0]
     non_crowd_ix = tf.where(gt_class_ids > 0)[:, 0]
     crowd_boxes = tf.gather(gt_boxes, crowd_ix)
@@ -602,6 +606,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
 
     # Assign positive ROIs to GT masks
     # Permute masks to [N, height, width, 1]
+    # tf.expand_dims在最后加一个长度为1的维度
+    # tf.transpose交互维度
     transposed_masks = tf.expand_dims(tf.transpose(gt_masks, [2, 0, 1]), -1)
     # Pick the right mask for each ROI
     roi_masks = tf.gather(transposed_masks, roi_gt_box_assignment)
@@ -880,7 +886,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
                        name='rpn_conv_shared')(feature_map)
 
     # Anchor Score. [batch, height, width, anchors per location * 2].
-    # anchors_per_location=3，锚点分数
+    # anchors_per_location=3，3种锚点比例
     x = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
                   activation='linear', name='rpn_class_raw')(shared)
 
@@ -2033,15 +2039,18 @@ class MaskRCNN():
         if mode == "training":
             # Class ID mask to mark class IDs supported by the dataset the image
             # came from.
+            # 解析并分割图片信息,获取分类ids
             active_class_ids = KL.Lambda(
                 lambda x: parse_image_meta_graph(x)["active_class_ids"]
             )(input_image_meta)
 
             if not config.USE_RPN_ROIS:
-                # Ignore predicted ROIs and use ROIs provided as an input.
+                # Ignore predicted ROIs and use ROIs provided as an input.POST_NMS_ROIS_TRAINING=2000
+                # 输入维度(2000,4)
                 input_rois = KL.Input(shape=[config.POST_NMS_ROIS_TRAINING, 4],
                                       name="input_roi", dtype=np.int32)
                 # Normalize coordinates
+                # 归一化坐标
                 target_rois = KL.Lambda(lambda x: norm_boxes_graph(
                     x, K.shape(input_image)[1:3]))(input_rois)
             else:
@@ -2073,6 +2082,7 @@ class MaskRCNN():
             output_rois = KL.Lambda(lambda x: x * 1, name="output_rois")(rois)
 
             # Losses
+            # 构造损失函数
             rpn_class_loss = KL.Lambda(lambda x: rpn_class_loss_graph(*x), name="rpn_class_loss")(
                 [input_rpn_match, rpn_class_logits])
             rpn_bbox_loss = KL.Lambda(lambda x: rpn_bbox_loss_graph(config, *x), name="rpn_bbox_loss")(
@@ -2085,6 +2095,13 @@ class MaskRCNN():
                 [target_mask, target_class_ids, mrcnn_mask])
 
             # Model
+            # input_image，填充后的图片数据
+            # input_image_meta，图片信息，包括原图宽高，填充后宽高，填充后图片区域，缩放比例
+            # input_rpn_match，RPN 前景/背景 可信度,前景：与物体框交集面积大于0.7，背景：与物体框交集面积小于0.3，计算获得
+            # input_rpn_bbox，RPN 偏移矩阵，相对于原图的偏移量，计算获得
+            # input_gt_class_ids，最后分类
+            # input_gt_boxes，最后区域
+            # input_gt_masks，最后masks
             inputs = [input_image, input_image_meta,
                       input_rpn_match, input_rpn_bbox, input_gt_class_ids, input_gt_boxes, input_gt_masks]
             if not config.USE_RPN_ROIS:
@@ -2225,7 +2242,7 @@ class MaskRCNN():
         """Gets the model ready for training. Adds losses, regularization, and
         metrics. Then calls the Keras compile() function.
         """
-        # Optimizer object
+        # Optimizer object，momentum（动量），变化范围限制在(±clipnorm)
         optimizer = keras.optimizers.SGD(
             lr=learning_rate, momentum=momentum,
             clipnorm=self.config.GRADIENT_CLIP_NORM)
@@ -2233,33 +2250,50 @@ class MaskRCNN():
         # First, clear previously set losses to avoid duplication
         self.keras_model._losses = []
         self.keras_model._per_input_losses = {}
+        # 损失函数名称
+        # rpn_class_loss RPN分类损失，前景与背景
+        # rpn_bbox_loss RPN
+        # mrcnn_class_loss 最终结果的分类损失
+        # mrcnn_bbox_loss 最终结果的框位置损失
+        # mrcnn_mask_loss 最终结果的Mask损失
         loss_names = [
             "rpn_class_loss",  "rpn_bbox_loss",
             "mrcnn_class_loss", "mrcnn_bbox_loss", "mrcnn_mask_loss"]
+        # 通过名称获得对应的顺手函数
         for name in loss_names:
             layer = self.keras_model.get_layer(name)
             if layer.output in self.keras_model.losses:
                 continue
+            # 求平均，keepdims（保留长度为1的数组结构,例如原输入维度为[50,2],求平均后维度为[1,1]）
+            # 每层损失函数在反向传播时的权重比例self.config.LOSS_WEIGHTS
             loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
                 * self.config.LOSS_WEIGHTS.get(name, 1.))
+            # 加到损失函数列表
             self.keras_model.add_loss(loss)
 
         # Add L2 Regularization
         # Skip gamma and beta weights of batch normalization layers.
+        # keras.regularizers.l2（L2正则化）
+        # 对"gamma"和"beta"以外的层的权重进行L2正则化
         reg_losses = [
             keras.regularizers.l2(self.config.WEIGHT_DECAY)(
                 w) / tf.cast(tf.size(w), tf.float32)
             for w in self.keras_model.trainable_weights
             if 'gamma' not in w.name and 'beta' not in w.name]
+        # 所有权重L2正则化后的losses加起来，形成一个整体的losses
         self.keras_model.add_loss(tf.add_n(reg_losses))
 
         # Compile
+        # 编译模型
+        # loss=[None] * len(self.keras_model.outputs),创建一个长度为输出数量的空数组
         self.keras_model.compile(
             optimizer=optimizer,
             loss=[None] * len(self.keras_model.outputs))
 
         # Add metrics for losses
+        # metrics度量指标，判断网络的性能
+        # 通过把loss添加到metrics_tensors，告诉网络训练时需要以对应的loss做参考
         for name in loss_names:
             if name in self.keras_model.metrics_names:
                 continue
@@ -2273,6 +2307,7 @@ class MaskRCNN():
     def set_trainable(self, layer_regex, keras_model=None, indent=0, verbose=1):
         """Sets model layers as trainable if their names match
         the given regular expression.
+        设置锁定层，训练时不改变当中的权重
         """
         # Print message on the first call (but not on recursive calls)
         if verbose > 0 and keras_model is None:
@@ -2429,16 +2464,20 @@ class MaskRCNN():
         log("Checkpoint Path: {}".format(self.checkpoint_path))
         # 锁定特定层的权重
         self.set_trainable(layers)
+        # 创建损失函数，包含5个损失函数，并添加到评估
         self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 
         # Work-around for Windows: Keras fails on Windows when using
         # multiprocessing workers. See discussion here:
         # https://github.com/matterport/Mask_RCNN/issues/13#issuecomment-353124009
+        # 多线程数量
         if os.name is 'nt':
             workers = 0
         else:
             workers = multiprocessing.cpu_count()
 
+        # 开始训练
+        # epochs（训练次数），steps_per_epoch（每次训练多少步）
         self.keras_model.fit_generator(
             train_generator,
             initial_epoch=self.epoch,
@@ -2920,6 +2959,7 @@ def trim_zeros_graph(boxes, name=None):
 
     boxes: [N, 4] matrix of boxes.
     non_zeros: [N] a 1D boolean mask identifying the rows to keep
+    # 移除0像素的框
     """
     non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
     boxes = tf.boolean_mask(boxes, non_zeros, name=name)
@@ -2949,8 +2989,10 @@ def norm_boxes_graph(boxes, shape):
     归一化坐标
     """
     h, w = tf.split(tf.cast(shape, tf.float32), 2)
+    # 因为坐标从0开始，为保持宽高，所以右下角坐标-1
     scale = tf.concat([h, w, h, w], axis=-1) - tf.constant(1.0)
     shift = tf.constant([0., 0., 1., 1.])
+    # tf.divide除法
     return tf.divide(boxes - shift, scale)
 
 
