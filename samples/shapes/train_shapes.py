@@ -93,9 +93,9 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
     
-    RPN_ANCHOR_SCALES = (32, 128, 512)
+    # RPN_ANCHOR_SCALES = (32, 128, 512)
 
-    BACKBONE = "resnet50"
+    # BACKBONE = "resnet50"
 
 
 config = ShapesConfig()
@@ -372,10 +372,10 @@ elif init_with == "last":
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
 # 锁定resnet部分权重，在预训练完时使用
-# model.train(dataset_train, dataset_val,
-#             learning_rate=config.LEARNING_RATE,
-#             epochs=1,
-#             layers='heads')
+model.train(dataset_train, dataset_val,
+            learning_rate=config.LEARNING_RATE,
+            epochs=1,
+            layers='heads')
 
 
 # In[9]:
