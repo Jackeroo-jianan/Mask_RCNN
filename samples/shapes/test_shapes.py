@@ -372,10 +372,10 @@ elif init_with == "last":
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
 # 锁定resnet部分权重，在预训练完时使用
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE,
-            epochs=1,
-            layers='heads')
+# model.train(dataset_train, dataset_val,
+#             learning_rate=config.LEARNING_RATE,
+#             epochs=1,
+#             layers='heads')
 
 
 # In[9]:
@@ -385,10 +385,10 @@ model.train(dataset_train, dataset_val,
 # Passing layers="all" trains all layers. You can also
 # pass a regular expression to select which layers to
 # train by name pattern.
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE / 10,
-            epochs=2,
-            layers="all")
+# model.train(dataset_train, dataset_val,
+#             learning_rate=config.LEARNING_RATE / 10,
+#             epochs=2,
+#             layers="all")
 
 
 # In[10]:
@@ -398,7 +398,7 @@ model.train(dataset_train, dataset_val,
 # Typically not needed because callbacks save after every epoch
 # Uncomment to save manually
 model_path = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
-model.keras_model.save_weights(model_path)
+# model.keras_model.save_weights(model_path)
 
 
 # ## Detection
