@@ -94,6 +94,8 @@ class ShapesConfig(Config):
 
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
+    
+    # RPN_ANCHOR_SCALES = (32, 128, 512)
 
     # BACKBONE = "resnet50"
 
