@@ -72,18 +72,16 @@ class ShapesConfig(Config):
 
     # Number of classes (including background)
     # 分类数量
-    NUM_CLASSES = 1 + 1  # background + 1 shapes
+    NUM_CLASSES = 1 + 10  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
-    # IMAGE_MIN_DIM = 800
-    # IMAGE_MAX_DIM = 1280
-    IMAGE_MIN_DIM = 400
-    IMAGE_MAX_DIM = 640
+    IMAGE_MIN_DIM = 800
+    IMAGE_MAX_DIM = 1280
 
     # Use smaller anchors because our image and objects are small
     # 控制识别图片的大小
-    RPN_ANCHOR_SCALES = (8*3, 16*3, 32*3, 64*3, 128*3)  # anchor side in pixels
+    RPN_ANCHOR_SCALES = (8*6, 16*6, 32*6, 64*6, 128*6)  # anchor side in pixels
 
     # Reduce training ROIs per image because the images are small and have
     # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
@@ -173,17 +171,16 @@ class MyDataset(utils.Dataset):
         """
         # Add classes
         # 分类
-        self.add_class("shapes", 0, "mai")
-        # self.add_class("shapes", 0, "0")
-        # self.add_class("shapes", 1, "1")
-        # self.add_class("shapes", 2, "2")
-        # self.add_class("shapes", 3, "3")
-        # self.add_class("shapes", 4, "4")
-        # self.add_class("shapes", 5, "5")
-        # self.add_class("shapes", 6, "6")
-        # self.add_class("shapes", 7, "7")
-        # self.add_class("shapes", 8, "8")
-        # self.add_class("shapes", 9, "9")
+        self.add_class("shapes", 0, "0")
+        self.add_class("shapes", 1, "1")
+        self.add_class("shapes", 2, "2")
+        self.add_class("shapes", 3, "3")
+        self.add_class("shapes", 4, "4")
+        self.add_class("shapes", 5, "5")
+        self.add_class("shapes", 6, "6")
+        self.add_class("shapes", 7, "7")
+        self.add_class("shapes", 8, "8")
+        self.add_class("shapes", 9, "9")
 
         for i in range(count):
             if os.path.isfile(os.path.join(img_floder, imglist[i])):
@@ -248,28 +245,26 @@ class MyDataset(utils.Dataset):
         labels = self.from_yaml_get_class(image_id)
         labels_form = []
         for i in range(len(labels)):
-            if labels[i].find("mai") == 0:
-                labels_form.append("mai")
-            # if labels[i].find("0") == 0:
-            #     labels_form.append("0")
-            # elif labels[i].find("1") == 0:
-            #     labels_form.append("1")
-            # elif labels[i].find("2") == 0:
-            #     labels_form.append("2")
-            # elif labels[i].find("3") == 0:
-            #     labels_form.append("3")
-            # elif labels[i].find("4") == 0:
-            #     labels_form.append("4")
-            # elif labels[i].find("5") == 0:
-            #     labels_form.append("5")
-            # elif labels[i].find("6") == 0:
-            #     labels_form.append("6")
-            # elif labels[i].find("7") == 0:
-            #     labels_form.append("7")
-            # elif labels[i].find("8") == 0:
-            #     labels_form.append("8")
-            # elif labels[i].find("9") == 0:
-            #     labels_form.append("9")
+            if labels[i].find("0") == 0:
+                labels_form.append("0")
+            elif labels[i].find("1") == 0:
+                labels_form.append("1")
+            elif labels[i].find("2") == 0:
+                labels_form.append("2")
+            elif labels[i].find("3") == 0:
+                labels_form.append("3")
+            elif labels[i].find("4") == 0:
+                labels_form.append("4")
+            elif labels[i].find("5") == 0:
+                labels_form.append("5")
+            elif labels[i].find("6") == 0:
+                labels_form.append("6")
+            elif labels[i].find("7") == 0:
+                labels_form.append("7")
+            elif labels[i].find("8") == 0:
+                labels_form.append("8")
+            elif labels[i].find("9") == 0:
+                labels_form.append("9")
         # 种类对应的序号
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)
