@@ -72,7 +72,7 @@ class ShapesConfig(Config):
 
     # Number of classes (including background)
     # 分类数量
-    NUM_CLASSES = 1 + 10  # background + 1 shapes
+    NUM_CLASSES = 1 + 11  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
@@ -179,6 +179,7 @@ class MyDataset(utils.Dataset):
         self.add_class("shapes", 7, "7")
         self.add_class("shapes", 8, "8")
         self.add_class("shapes", 9, "9")
+        self.add_class("shapes", 10, "x")
 
         for i in range(count):
             if os.path.isfile(os.path.join(img_floder, imglist[i])):
@@ -263,6 +264,8 @@ class MyDataset(utils.Dataset):
                 labels_form.append("8")
             elif labels[i].find("9") == 0:
                 labels_form.append("9")
+            elif labels[i].find("x") == 0:
+                labels_form.append("x")
         # 种类对应的序号
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)

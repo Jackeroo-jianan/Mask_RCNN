@@ -45,8 +45,17 @@ from mrcnn.model import log
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Local path to trained weights file
-# COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
-COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
+isFrist=True
+if os.path.isfile(os.path.join(MODEL_DIR, "mask_rcnn_my.h5")):
+    isFrist=False
+
+# 首次训练时，使用coco预训练权重
+if isFrist:
+    print("首次训练")
+    COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+else:
+    print("继续训练")
+    COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
 # Download COCO trained weights from Releases if needed
 # if not os.path.exists(COCO_MODEL_PATH):
 #     utils.download_trained_weights(COCO_MODEL_PATH)
@@ -72,7 +81,7 @@ class ShapesConfig(Config):
 
     # Number of classes (including background)
     # 分类数量
-    NUM_CLASSES = 1 + 10  # background + 1 shapes
+    NUM_CLASSES = 1 + 11  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
@@ -181,6 +190,7 @@ class MyDataset(utils.Dataset):
         self.add_class("shapes", 7, "7")
         self.add_class("shapes", 8, "8")
         self.add_class("shapes", 9, "9")
+        self.add_class("shapes", 10, "x")
 
         for i in range(count):
             if os.path.isfile(os.path.join(img_floder, imglist[i])):
@@ -265,6 +275,8 @@ class MyDataset(utils.Dataset):
                 labels_form.append("8")
             elif labels[i].find("9") == 0:
                 labels_form.append("9")
+            elif labels[i].find("x") == 0:
+                labels_form.append("x")
         # 种类对应的序号
         class_ids = np.array([self.class_names.index(s) for s in labels_form])
         return mask, class_ids.astype(np.int32)
@@ -345,10 +357,13 @@ elif init_with == "coco":
     # See README for instructions to download the COCO weights
     if os.path.isfile(COCO_MODEL_PATH):
         print("加载模型：", COCO_MODEL_PATH)
-        # model.load_weights(COCO_MODEL_PATH, by_name=True,
-        #                    exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
-        #                             "mrcnn_bbox", "mrcnn_mask"])
-        model.load_weights(COCO_MODEL_PATH, by_name=True)
+        # 首次训练时，使用coco预训练权重
+        if isFrist:
+            model.load_weights(COCO_MODEL_PATH, by_name=True,
+                            exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                                        "mrcnn_bbox", "mrcnn_mask"])
+        else:
+            model.load_weights(COCO_MODEL_PATH, by_name=True)
 elif init_with == "last":
     # Load the last model you trained and continue training
     model.load_weights(model.find_last(), by_name=True)
