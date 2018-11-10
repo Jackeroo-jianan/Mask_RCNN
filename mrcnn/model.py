@@ -891,12 +891,12 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
                   activation='linear', name='rpn_class_raw')(shared)
 
     # Reshape to [batch, anchors, 2]
-    # 背景和前景做分类
+    # 背景和前景做分类，anchors=height*width*3种锚点比例
     rpn_class_logits = KL.Lambda(
         lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 2]))(x)
 
     # Softmax on last dimension of BG/FG.
-    # 分类 背景和前景，做softmax处理
+    # 分类 背景和前景，做softmax处理，0-1范围
     rpn_probs = KL.Activation(
         "softmax", name="rpn_class_xxx")(rpn_class_logits)
 
@@ -907,7 +907,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
                   activation='linear', name='rpn_bbox_pred')(shared)
 
     # Reshape to [batch, anchors, 4]
-    # 4个框坐标
+    # 4个框坐标，anchors=height*width*3种锚点比例
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 4]))(x)
 
     return [rpn_class_logits, rpn_probs, rpn_bbox]
@@ -918,10 +918,10 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth):
     It wraps the RPN graph so it can be used multiple times with shared
     weights.
 
-    anchors_per_location: number of anchors per pixel in the feature map
+    anchors_per_location: number of anchors per pixel in the feature map（特征图中每个像素的锚点数量）
     anchor_stride: Controls the density of anchors. Typically 1 (anchors for
-                   every pixel in the feature map), or 2 (every other pixel).
-    depth: Depth of the backbone feature map.
+                   every pixel in the feature map), or 2 (every other pixel).（控制锚的密度。通常为1(每个特征图中的像素都有锚点)或2(每2个像素)。）
+    depth: Depth of the backbone feature map.（特征图的深度）
 
     Returns a Keras Model object. The model outputs, when called, are:
     rpn_class_logits: [batch, H * W * anchors_per_location, 2] Anchor classifier logits (before softmax)
@@ -929,6 +929,7 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth):
     rpn_bbox: [batch, H * W * anchors_per_location, (dy, dx, log(dh), log(dw))] Deltas to be
                 applied to anchors.
     """
+    # 这里depth=256，外面逐个把特征输入进RPN网络
     input_feature_map = KL.Input(shape=[None, None, depth],
                                  name="input_rpn_feature_map")
     outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
@@ -1992,12 +1993,16 @@ class MaskRCNN():
         # Anchors
         # 描点,预选框，5种大小，3种形状，
         if mode == "training":
+            # 生成5个特征相对于原图大小的所有候选框
+            # 128*128输入图片，anchors.shape：(4096,4)
             anchors = self.get_anchors(config.IMAGE_SHAPE)
             # Duplicate across the batch dimension because Keras requires it
             # TODO: can this be optimized to avoid duplicating the anchors?
+            # 分批次同时训练，根据显卡数量
             anchors = np.broadcast_to(
                 anchors, (config.BATCH_SIZE,) + anchors.shape)
             # A hack to get around Keras's bad support for constants
+            # 矩阵转成Keras中的变量
             anchors = KL.Lambda(lambda x: tf.Variable(
                 anchors), name="anchors")(input_image)
         else:
@@ -2006,9 +2011,11 @@ class MaskRCNN():
         # RPN Model
         # RPN分析每层特征，并选出可能存在物体的候选框
         # RPN_ANCHOR_STRIDE=1，RPN_ANCHOR_RATIOS=[0.5, 1, 2]，TOP_DOWN_PYRAMID_SIZE=256
+        # 构造RPN网络
         rpn = build_rpn_model(config.RPN_ANCHOR_STRIDE,
                               len(config.RPN_ANCHOR_RATIOS), config.TOP_DOWN_PYRAMID_SIZE)
         # Loop through pyramid layers
+        # 循环特征金字塔输入RPN网络,输出结果加到layer_outputs
         layer_outputs = []  # list of lists
         for p in rpn_feature_maps:
             layer_outputs.append(rpn([p]))
@@ -2727,12 +2734,14 @@ class MaskRCNN():
 
     def get_anchors(self, image_shape):
         """Returns anchor pyramid for the given image size."""
+        # 计算5个特征图的锚点数
         backbone_shapes = compute_backbone_shapes(self.config, image_shape)
         # Cache anchors and reuse if image shape is the same
         if not hasattr(self, "_anchor_cache"):
             self._anchor_cache = {}
         if not tuple(image_shape) in self._anchor_cache:
             # Generate Anchors
+            # 生成候选框列表，包含了5层特征映射到原图大小后的所有候选框
             a = utils.generate_pyramid_anchors(
                 self.config.RPN_ANCHOR_SCALES,
                 self.config.RPN_ANCHOR_RATIOS,
@@ -2744,7 +2753,7 @@ class MaskRCNN():
             # TODO: Remove this after the notebook are refactored to not use it
             self.anchors = a
             # Normalize coordinates
-            # 坐标归一化
+            # 候选框坐标归一化
             self._anchor_cache[tuple(image_shape)] = utils.norm_boxes(
                 a, image_shape[:2])
         return self._anchor_cache[tuple(image_shape)]

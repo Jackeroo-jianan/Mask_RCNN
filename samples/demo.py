@@ -1,13 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
-
+#%% [markdown]
 # # Mask R-CNN Demo
 # 
 # A quick intro to using the pre-trained model to detect and segment objects.
 
-# In[1]:
-
-
+#%%
 import os
 import sys
 import random
@@ -43,16 +39,14 @@ if not os.path.exists(COCO_MODEL_PATH):
 # Directory of images to run detection on
 IMAGE_DIR = os.path.join(ROOT_DIR, "images")
 
-
+#%% [markdown]
 # ## Configurations
 # 
 # We'll be using a model trained on the MS-COCO dataset. The configurations of this model are in the ```CocoConfig``` class in ```coco.py```.
 # 
 # For inferencing, modify the configurations a bit to fit the task. To do so, sub-class the ```CocoConfig``` class and override the attributes you need to change.
 
-# In[2]:
-
-
+#%%
 class InferenceConfig(coco.CocoConfig):
     # Set batch size to 1 since we'll be running inference on
     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
@@ -62,19 +56,17 @@ class InferenceConfig(coco.CocoConfig):
 config = InferenceConfig()
 config.display()
 
-
+#%% [markdown]
 # ## Create Model and Load Trained Weights
 
-# In[3]:
-
-
+#%%
 # Create model object in inference mode.
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
 
 # Load weights trained on MS-COCO
 model.load_weights(COCO_MODEL_PATH, by_name=True)
 
-
+#%% [markdown]
 # ## Class Names
 # 
 # The model classifies objects and returns class IDs, which are integer value that identify each class. Some datasets assign integer values to their classes and some don't. For example, in the MS-COCO dataset, the 'person' class is 1 and 'teddy bear' is 88. The IDs are often sequential, but not always. The COCO dataset, for example, has classes associated with class IDs 70 and 72, but not 71.
@@ -94,9 +86,7 @@ model.load_weights(COCO_MODEL_PATH, by_name=True)
 # 
 # We don't want to require you to download the COCO dataset just to run this demo, so we're including the list of class names below. The index of the class name in the list represent its ID (first class is 0, second is 1, third is 2, ...etc.)
 
-# In[4]:
-
-
+#%%
 # COCO Class names
 # Index of the class in the list is its ID. For example, to get ID of
 # the teddy bear class, use: class_names.index('teddy bear')
@@ -116,30 +106,20 @@ class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
                'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
                'teddy bear', 'hair drier', 'toothbrush']
 
-
+#%% [markdown]
 # ## Run Object Detection
 
-# In[5]:
-
-
+#%%
 # Load a random image from the images folder
-# 读取随机图片
 file_names = next(os.walk(IMAGE_DIR))[2]
 image = skimage.io.imread(os.path.join(IMAGE_DIR, random.choice(file_names)))
 
 # Run detection
-# 识别图片
 results = model.detect([image], verbose=1)
 
 # Visualize results
-# 显示图片
 r = results[0]
 visualize.display_instances(image, r['rois'], r['masks'], r['class_ids'], 
                             class_names, r['scores'])
-
-
-# In[ ]:
-
-
 
 

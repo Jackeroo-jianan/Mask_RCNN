@@ -1,6 +1,4 @@
-
-# coding: utf-8
-
+#%% [markdown]
 # # Mask R-CNN - Train on Shapes Dataset
 # 
 # 
@@ -8,9 +6,7 @@
 # 
 # The code of the *Shapes* dataset is included below. It generates images on the fly, so it doesn't require downloading any data. And it can generate images of any size, so we pick a small image size to train faster. 
 
-# In[1]:
-
-
+#%%
 import os
 import sys
 import random
@@ -44,12 +40,10 @@ COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 if not os.path.exists(COCO_MODEL_PATH):
     utils.download_trained_weights(COCO_MODEL_PATH)
 
-
+#%% [markdown]
 # ## Configurations
 
-# In[2]:
-
-
+#%%
 class ShapesConfig(Config):
     """Configuration for training on the toy shapes dataset.
     Derives from the base Config class and overrides values specific
@@ -87,12 +81,10 @@ class ShapesConfig(Config):
 config = ShapesConfig()
 config.display()
 
-
+#%% [markdown]
 # ## Notebook Preferences
 
-# In[3]:
-
-
+#%%
 def get_ax(rows=1, cols=1, size=8):
     """Return a Matplotlib Axes array to be used in
     all visualizations in the notebook. Provide a
@@ -104,7 +96,7 @@ def get_ax(rows=1, cols=1, size=8):
     _, ax = plt.subplots(rows, cols, figsize=(size*cols, size*rows))
     return ax
 
-
+#%% [markdown]
 # ## Dataset
 # 
 # Create a synthetic dataset
@@ -115,9 +107,7 @@ def get_ax(rows=1, cols=1, size=8):
 # * load_mask()
 # * image_reference()
 
-# In[4]:
-
-
+#%%
 class ShapesDataset(utils.Dataset):
     """Generates the shapes synthetic dataset. The dataset consists of simple
     shapes (triangles, squares, circles) placed randomly on a blank surface.
@@ -246,9 +236,7 @@ class ShapesDataset(utils.Dataset):
         return bg_color, shapes
 
 
-# In[5]:
-
-
+#%%
 # Training dataset
 dataset_train = ShapesDataset()
 dataset_train.load_shapes(500, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
@@ -260,9 +248,7 @@ dataset_val.load_shapes(50, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
 dataset_val.prepare()
 
 
-# In[6]:
-
-
+#%%
 # Load and display random samples
 image_ids = np.random.choice(dataset_train.image_ids, 4)
 for image_id in image_ids:
@@ -270,20 +256,16 @@ for image_id in image_ids:
     mask, class_ids = dataset_train.load_mask(image_id)
     visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
 
-
+#%% [markdown]
 # ## Ceate Model
 
-# In[ ]:
-
-
+#%%
 # Create model in training mode
 model = modellib.MaskRCNN(mode="training", config=config,
                           model_dir=MODEL_DIR)
 
 
-# In[7]:
-
-
+#%%
 # Which weights to start with?
 init_with = "coco"  # imagenet, coco, or last
 
@@ -300,7 +282,7 @@ elif init_with == "last":
     # Load the last model you trained and continue training
     model.load_weights(model.find_last(), by_name=True)
 
-
+#%% [markdown]
 # ## Training
 # 
 # Train in two stages:
@@ -308,9 +290,7 @@ elif init_with == "last":
 # 
 # 2. Fine-tune all layers. For this simple example it's not necessary, but we're including it to show the process. Simply pass `layers="all` to train all layers.
 
-# In[8]:
-
-
+#%%
 # Train the head branches
 # Passing layers="heads" freezes all layers except the head
 # layers. You can also pass a regular expression to select
@@ -321,9 +301,7 @@ model.train(dataset_train, dataset_val,
             layers='heads')
 
 
-# In[9]:
-
-
+#%%
 # Fine tune all layers
 # Passing layers="all" trains all layers. You can also 
 # pass a regular expression to select which layers to
@@ -334,21 +312,17 @@ model.train(dataset_train, dataset_val,
             layers="all")
 
 
-# In[10]:
-
-
+#%%
 # Save weights
 # Typically not needed because callbacks save after every epoch
 # Uncomment to save manually
 # model_path = os.path.join(MODEL_DIR, "mask_rcnn_shapes.h5")
 # model.keras_model.save_weights(model_path)
 
-
+#%% [markdown]
 # ## Detection
 
-# In[11]:
-
-
+#%%
 class InferenceConfig(ShapesConfig):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
@@ -370,9 +344,7 @@ print("Loading weights from ", model_path)
 model.load_weights(model_path, by_name=True)
 
 
-# In[12]:
-
-
+#%%
 # Test on a random image
 image_id = random.choice(dataset_val.image_ids)
 original_image, image_meta, gt_class_id, gt_bbox, gt_mask =    modellib.load_image_gt(dataset_val, inference_config, 
@@ -388,21 +360,17 @@ visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
                             dataset_train.class_names, figsize=(8, 8))
 
 
-# In[13]:
-
-
+#%%
 results = model.detect([original_image], verbose=1)
 
 r = results[0]
 visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'], 
                             dataset_val.class_names, r['scores'], ax=get_ax())
 
-
+#%% [markdown]
 # ## Evaluation
 
-# In[14]:
-
-
+#%%
 # Compute VOC-Style mAP @ IoU=0.5
 # Running on 10 images. Increase for better accuracy.
 image_ids = np.random.choice(dataset_val.image_ids, 10)
@@ -421,4 +389,5 @@ for image_id in image_ids:
     APs.append(AP)
     
 print("mAP: ", np.mean(APs))
+
 
