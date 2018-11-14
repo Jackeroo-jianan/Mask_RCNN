@@ -561,6 +561,8 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # Remove zero padding
     # 去掉0像素的框
     proposals, _ = trim_zeros_graph(proposals, name="trim_proposals")
+    # 去掉训练样本中的0像素框、标签以及mask
+    # non_zeros:对应的bool数组
     gt_boxes, non_zeros = trim_zeros_graph(gt_boxes, name="trim_gt_boxes")
     gt_class_ids = tf.boolean_mask(gt_class_ids, non_zeros,
                                    name="trim_gt_class_ids")
@@ -571,7 +573,9 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     # A crowd box in COCO is a bounding box around several instances. Exclude
     # them from training. A crowd box is given a negative class ID.
     # tf.gather通过下标找到对应项
+    # id<0,包围框或背景。不参与训练
     crowd_ix = tf.where(gt_class_ids < 0)[:, 0]
+    # id>0，物体框
     non_crowd_ix = tf.where(gt_class_ids > 0)[:, 0]
     crowd_boxes = tf.gather(gt_boxes, crowd_ix)
     crowd_masks = tf.gather(gt_masks, crowd_ix, axis=2)

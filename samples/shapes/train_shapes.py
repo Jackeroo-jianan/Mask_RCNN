@@ -179,17 +179,17 @@ class MyDataset(utils.Dataset):
         height, width: the size of the generated images.
         """
         # Add classes
-        # 分类
-        self.add_class("shapes", 0, "0")
-        self.add_class("shapes", 1, "1")
-        self.add_class("shapes", 2, "2")
-        self.add_class("shapes", 3, "3")
-        self.add_class("shapes", 4, "4")
-        self.add_class("shapes", 5, "5")
-        self.add_class("shapes", 6, "6")
-        self.add_class("shapes", 7, "7")
-        self.add_class("shapes", 8, "8")
-        self.add_class("shapes", 9, "9")
+        # 分类，id要从1开始
+        self.add_class("shapes", 1, "0")
+        self.add_class("shapes", 2, "1")
+        self.add_class("shapes", 3, "2")
+        self.add_class("shapes", 4, "3")
+        self.add_class("shapes", 5, "4")
+        self.add_class("shapes", 6, "5")
+        self.add_class("shapes", 7, "6")
+        self.add_class("shapes", 8, "7")
+        self.add_class("shapes", 9, "8")
+        self.add_class("shapes", 10, "9")
 
         for i in range(count):
             if os.path.isfile(os.path.join(img_floder, imglist[i])):
