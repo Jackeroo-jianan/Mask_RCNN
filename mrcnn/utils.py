@@ -839,12 +839,18 @@ def batch_slice(inputs, graph_fn, batch_size, names=None):
     batch_size: number of slices to divide the data into.
     names: If provided, assigns names to the resulting tensors.
     """
+    # 逐行调用执行函数
+    # inputs：参数
+    # graph_fn：执行函数
+    # batch_size：inputs的数量
+    # 封装成list
     if not isinstance(inputs, list):
         inputs = [inputs]
 
     outputs = []
     for i in range(batch_size):
         inputs_slice = [x[i] for x in inputs]
+        # 把(1,2,3)转成多个参数传进graph_fn(1, 2, 3)
         output_slice = graph_fn(*inputs_slice)
         if not isinstance(output_slice, (tuple, list)):
             output_slice = [output_slice]
@@ -852,6 +858,7 @@ def batch_slice(inputs, graph_fn, batch_size, names=None):
     # Change outputs from a list of slices where each is
     # a list of outputs to a list of outputs and each has
     # a list of slices
+    # 转置，为了把输出变成每行对应一种结果，方便分离结果
     outputs = list(zip(*outputs))
 
     if names is None:

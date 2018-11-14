@@ -253,6 +253,7 @@ def clip_boxes_graph(boxes, window):
     boxes: [N, (y1, x1, y2, x2)]
     window: [4] in the form y1, x1, y2, x2
     """
+    # 修正候选框，在图片范围内，超出部分截取掉
     # Split
     wy1, wx1, wy2, wx2 = tf.split(window, 4)
     y1, x1, y2, x2 = tf.split(boxes, 4, axis=1)
@@ -262,7 +263,8 @@ def clip_boxes_graph(boxes, window):
     y2 = tf.maximum(tf.minimum(y2, wy2), wy1)
     x2 = tf.maximum(tf.minimum(x2, wx2), wx1)
     clipped = tf.concat([y1, x1, y2, x2], axis=1, name="clipped_boxes")
-    clipped.set_shape((clipped.shape[0], 4))
+    # 下面这行好像去掉也能执行
+    # clipped.set_shape((clipped.shape[0], 4))
     return clipped
 
 
@@ -289,29 +291,39 @@ class ProposalLayer(KE.Layer):
 
     def call(self, inputs):
         # Box Scores. Use the foreground class confidence. [Batch, num_rois, 1]
+        # 前景/背景分类[Batch, num_rois, 1]
         scores = inputs[0][:, :, 1]
         # Box deltas [batch, num_rois, 4]
+        # 框偏移量
         deltas = inputs[1]
+        # 偏移量
         deltas = deltas * np.reshape(self.config.RPN_BBOX_STD_DEV, [1, 1, 4])
-        # Anchors
+        # Anchors [batch, anchors, 4]
+        # 5层特征所有候选框集合
         anchors = inputs[2]
 
         # Improve performance by trimming to top anchors by score
         # and doing the rest on the smaller subset.
+        # PRE_NMS_LIMIT=6000,最多6000个候选框
         pre_nms_limit = tf.minimum(
             self.config.PRE_NMS_LIMIT, tf.shape(anchors)[1])
+        # 找出每张图最高分的前6000个锚点下标
         ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
                          name="top_anchors").indices
+        # 按下标找到分数
         scores = utils.batch_slice([scores, ix], lambda x, y: tf.gather(x, y),
                                    self.config.IMAGES_PER_GPU)
+        # 按下标找到偏移量
         deltas = utils.batch_slice([deltas, ix], lambda x, y: tf.gather(x, y),
                                    self.config.IMAGES_PER_GPU)
+        # 按下标找到候选框
         pre_nms_anchors = utils.batch_slice([anchors, ix], lambda a, x: tf.gather(a, x),
                                             self.config.IMAGES_PER_GPU,
                                             names=["pre_nms_anchors"])
 
         # Apply deltas to anchors to get refined anchors.
         # [batch, N, (y1, x1, y2, x2)]
+        # 应用偏移量到候选框，偏移量是中心偏移量与宽高缩放比例
         boxes = utils.batch_slice([pre_nms_anchors, deltas],
                                   lambda x, y: apply_box_deltas_graph(x, y),
                                   self.config.IMAGES_PER_GPU,
@@ -319,6 +331,7 @@ class ProposalLayer(KE.Layer):
 
         # Clip to image boundaries. Since we're in normalized coordinates,
         # clip to 0..1 range. [batch, N, (y1, x1, y2, x2)]
+        # 修正候选框，在图片范围内，超出部分截取掉
         window = np.array([0, 0, 1, 1], dtype=np.float32)
         boxes = utils.batch_slice(boxes,
                                   lambda x: clip_boxes_graph(x, window),
@@ -330,14 +343,20 @@ class ProposalLayer(KE.Layer):
         # for small objects, so we're skipping it.
 
         # Non-max suppression
+        # NMS，非极大值抑制
         def nms(boxes, scores):
+            # 最大输出2000个候选框下标
             indices = tf.image.non_max_suppression(
                 boxes, scores, self.proposal_count,
                 self.nms_threshold, name="rpn_non_max_suppression")
+            # 通过下标找到候选框
             proposals = tf.gather(boxes, indices)
             # Pad if needed
+            # 填充0，保证输出的矩阵长度为最大值
             padding = tf.maximum(self.proposal_count -
                                  tf.shape(proposals)[0], 0)
+            # proposals：[batch, self.proposal_count, (y1, x1, y2, x2)]
+            # tf.pad：在矩阵各维度前后填0，[(第1维前填充数,第1维后填充数)，(第2维前填充数,第2维后填充数)]
             proposals = tf.pad(proposals, [(0, padding), (0, 0)])
             return proposals
         proposals = utils.batch_slice([boxes, scores], nms,
@@ -345,6 +364,7 @@ class ProposalLayer(KE.Layer):
         return proposals
 
     def compute_output_shape(self, input_shape):
+        # 输出时的维度
         return (None, self.proposal_count, 4)
 
 
@@ -681,6 +701,11 @@ class DetectionTargetLayer(KE.Layer):
         self.config = config
 
     def call(self, inputs):
+        # rois
+        # proposals：存在物体的框
+        # gt_class_ids多个框对应的分类ID
+        # gt_boxes框的坐标，
+        # gt_boxes物体的masks
         proposals = inputs[0]
         gt_class_ids = inputs[1]
         gt_boxes = inputs[2]
@@ -826,6 +851,7 @@ class DetectionLayer(KE.Layer):
         self.config = config
 
     def call(self, inputs):
+        # target_rois, input_gt_class_ids, gt_boxes, input_gt_masks
         rois = inputs[0]
         mrcnn_class = inputs[1]
         mrcnn_bbox = inputs[2]
@@ -1923,9 +1949,11 @@ class MaskRCNN():
                 shape=[None], name="input_gt_class_ids", dtype=tf.int32)
             # 2. GT Boxes in pixels (zero padded)
             # [batch, MAX_GT_INSTANCES, (y1, x1, y2, x2)] in image coordinates
+            # 物体框输入，MAX_GT_INSTANCES：最大物体框数量
             input_gt_boxes = KL.Input(
                 shape=[None, 4], name="input_gt_boxes", dtype=tf.float32)
             # Normalize coordinates
+            # 归一化坐标
             gt_boxes = KL.Lambda(lambda x: norm_boxes_graph(
                 x, K.shape(input_image)[1:3]))(input_gt_boxes)
             # 3. GT Masks (zero padded)
@@ -2002,7 +2030,8 @@ class MaskRCNN():
             anchors = np.broadcast_to(
                 anchors, (config.BATCH_SIZE,) + anchors.shape)
             # A hack to get around Keras's bad support for constants
-            # 矩阵转成Keras中的变量
+            # KL.Lambda自定义层,矩阵转成Keras中的变量,input_image只是参数，没用
+            # 返回一层，不是返回一个变量
             anchors = KL.Lambda(lambda x: tf.Variable(
                 anchors), name="anchors")(input_image)
         else:
@@ -2024,7 +2053,9 @@ class MaskRCNN():
         # of outputs across levels.
         # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
         output_names = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+        # 矩阵转置，把所有特征经过RPN的三种结果，拆分出来形成独立的矩阵
         outputs = list(zip(*layer_outputs))
+        # KL.Concatenate从指定维度合并数据
         outputs = [KL.Concatenate(axis=1, name=n)(list(o))
                    for o, n in zip(outputs, output_names)]
 
@@ -2034,8 +2065,13 @@ class MaskRCNN():
         # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
         # and zero padded.
         # ROI层，把不同大小图片压缩到固定大小，用于后续分类及目标检测
+        # POST_NMS_ROIS_TRAINING=2000，POST_NMS_ROIS_INFERENCE=1000
         proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training"\
             else config.POST_NMS_ROIS_INFERENCE
+        # ProposalLayer层包含提取最高分的框，
+        # 框根据偏移量左变换，并裁剪超出图片的框大小，
+        # 然后做NMS非最大值抑制,返回proposal_count个框（小于这个数则用0填充）
+        # rpn_class：分数，rpn_bbox：框的位置大小，anchors：候选框
         rpn_rois = ProposalLayer(
             proposal_count=proposal_count,
             nms_threshold=config.RPN_NMS_THRESHOLD,
@@ -2046,7 +2082,7 @@ class MaskRCNN():
         if mode == "training":
             # Class ID mask to mark class IDs supported by the dataset the image
             # came from.
-            # 解析并分割图片信息,获取分类ids
+            # 解析并分割图片信息,获取分类列表ids
             active_class_ids = KL.Lambda(
                 lambda x: parse_image_meta_graph(x)["active_class_ids"]
             )(input_image_meta)
@@ -2054,6 +2090,7 @@ class MaskRCNN():
             if not config.USE_RPN_ROIS:
                 # Ignore predicted ROIs and use ROIs provided as an input.POST_NMS_ROIS_TRAINING=2000
                 # 输入维度(2000,4)
+                # 经过ProposalLayer层产生的有物体的候选框集合，最大长度2000
                 input_rois = KL.Input(shape=[config.POST_NMS_ROIS_TRAINING, 4],
                                       name="input_roi", dtype=np.int32)
                 # Normalize coordinates
@@ -2067,6 +2104,8 @@ class MaskRCNN():
             # Subsamples proposals and generates target outputs for training
             # Note that proposal class IDs, gt_boxes, and gt_masks are zero
             # padded. Equally, returned rois and targets are zero padded.
+            # 参数：存在物体的框，多个框对应的分类ID，框的坐标，物体的masks
+            # 返回值：
             rois, target_class_ids, target_bbox, target_mask =\
                 DetectionTargetLayer(config, name="proposal_targets")([
                     target_rois, input_gt_class_ids, gt_boxes, input_gt_masks])
@@ -2742,6 +2781,9 @@ class MaskRCNN():
         if not tuple(image_shape) in self._anchor_cache:
             # Generate Anchors
             # 生成候选框列表，包含了5层特征映射到原图大小后的所有候选框
+            # 候选框总数=特征点总像素数*3种形状。
+            # 框的大小对应特征的层次变化。越上层特征，特征框越小。越底层特征，特征框越大。
+            # 因为特征越小越抽象，识别到的特征越全面，对应大目标整体。
             a = utils.generate_pyramid_anchors(
                 self.config.RPN_ANCHOR_SCALES,
                 self.config.RPN_ANCHOR_RATIOS,
