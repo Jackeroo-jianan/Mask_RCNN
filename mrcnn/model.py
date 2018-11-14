@@ -548,11 +548,12 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     Note: Returned arrays might be zero padded if not enough target ROIs.
     """
     # Assertions
-    # 判断proposals数量是否大于0，否则报错
+    # 判断proposals数量是否大于0，否则打印proposals
     asserts = [
         tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
                   name="roi_assertion"),
     ]
+    # tf.control_dependencies，with里每步执行前要执行的代码
     with tf.control_dependencies(asserts):
         # tf.identity常量
         proposals = tf.identity(proposals)
@@ -2087,6 +2088,7 @@ class MaskRCNN():
                 lambda x: parse_image_meta_graph(x)["active_class_ids"]
             )(input_image_meta)
 
+            # config.USE_RPN_ROIS=True,执行else部分
             if not config.USE_RPN_ROIS:
                 # Ignore predicted ROIs and use ROIs provided as an input.POST_NMS_ROIS_TRAINING=2000
                 # 输入维度(2000,4)
@@ -3012,7 +3014,9 @@ def trim_zeros_graph(boxes, name=None):
     non_zeros: [N] a 1D boolean mask identifying the rows to keep
     # 移除0像素的框
     """
+    # 找到0像素的框，转bool数组
     non_zeros = tf.cast(tf.reduce_sum(tf.abs(boxes), axis=1), tf.bool)
+    # 根据bool数组排除为0的框
     boxes = tf.boolean_mask(boxes, non_zeros, name=name)
     return boxes, non_zeros
 

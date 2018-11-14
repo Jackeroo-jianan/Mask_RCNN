@@ -81,7 +81,7 @@ class ShapesConfig(Config):
 
     # Number of classes (including background)
     # 分类数量
-    NUM_CLASSES = 1 + 11  # background + 1 shapes
+    NUM_CLASSES = 1 + 10  # background + 1 shapes
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
