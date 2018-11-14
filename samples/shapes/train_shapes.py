@@ -97,7 +97,7 @@ class ShapesConfig(Config):
     TRAIN_ROIS_PER_IMAGE = 32
 
     # Use a small epoch since the data is simple训练步数
-    STEPS_PER_EPOCH = 100
+    STEPS_PER_EPOCH = 200
 
     # use small validation steps since the epoch is small验证数量
     VALIDATION_STEPS = 5
