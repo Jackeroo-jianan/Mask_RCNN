@@ -577,10 +577,15 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
     crowd_ix = tf.where(gt_class_ids < 0)[:, 0]
     # id>0，物体框
     non_crowd_ix = tf.where(gt_class_ids > 0)[:, 0]
+    # 背景框
     crowd_boxes = tf.gather(gt_boxes, crowd_ix)
+    # 背景mask,没用
     crowd_masks = tf.gather(gt_masks, crowd_ix, axis=2)
+    # 前景分类
     gt_class_ids = tf.gather(gt_class_ids, non_crowd_ix)
+    # 前景框
     gt_boxes = tf.gather(gt_boxes, non_crowd_ix)
+    # 前景mask
     gt_masks = tf.gather(gt_masks, non_crowd_ix, axis=2)
 
     # Compute overlaps matrix [proposals, gt_boxes]
