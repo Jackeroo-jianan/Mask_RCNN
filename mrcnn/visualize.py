@@ -80,6 +80,7 @@ def apply_mask(image, mask, color, alpha=0.5):
     return image
 
 
+# myfont = plt.font_manager.FontProperties(fname='/home/hillsun/anaconda3/envs/py3/lib/python3.6/site-packages/matplotlib/mpl-data/fonts/ttf/MSYH.TTC')
 def display_instances(image, boxes, masks, class_ids, class_names,
                       scores=None, title="",
                       figsize=(16, 16), ax=None,
@@ -97,6 +98,11 @@ def display_instances(image, boxes, masks, class_ids, class_names,
     colors: (optional) An array or colors to use with each object
     captions: (optional) A list of strings to use as captions for each object
     """
+    # print('plt属性：',plt.rcParams)
+    # plt.rcParams['font.sans-serif']=['msyh']
+    # plt.rcParams['font.family']=['sans-serif']
+    plt.rcParams['axes.unicode_minus'] = False
+    
     # Number of instances
     N = boxes.shape[0]
     if not N:
@@ -122,6 +128,8 @@ def display_instances(image, boxes, masks, class_ids, class_names,
 
     masked_image = image.astype(np.uint32).copy()
     for i in range(N):
+        if len(class_names)-1<class_ids[i]:
+            continue
         color = colors[i]
 
         # Bounding box

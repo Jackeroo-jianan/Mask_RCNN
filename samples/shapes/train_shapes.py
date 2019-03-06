@@ -31,6 +31,7 @@ ROOT_DIR = os.path.abspath("../../")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
+
 from mrcnn.config import Config
 from mrcnn import utils
 import mrcnn.model as modellib
@@ -53,6 +54,7 @@ if os.path.isfile(os.path.join(MODEL_DIR, "mask_rcnn_my.h5")):
 if isFrist:
     print("首次训练")
     COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+    # COCO_MODEL_PATH = ""
 else:
     print("继续训练")
     COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
@@ -85,8 +87,14 @@ class ShapesConfig(Config):
 
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
-    IMAGE_MIN_DIM = 800
+    IMAGE_MIN_DIM = 768
     IMAGE_MAX_DIM = 1280
+    # IMAGE_MIN_DIM = 1088
+    # IMAGE_MAX_DIM = 1920
+    # IMAGE_MIN_DIM = 768
+    # IMAGE_MAX_DIM = 1408
+    # IMAGE_MIN_DIM = 576
+    # IMAGE_MAX_DIM = 704
 
     # Use smaller anchors because our image and objects are small
     # 控制识别图片的大小
@@ -320,14 +328,14 @@ dataset_val.prepare()
 
 
 # Load and display random samples
-image_ids = np.random.choice(dataset_train.image_ids, 4)
-for image_id in image_ids:
-    image = dataset_train.load_image(image_id)
-    mask, class_ids = dataset_train.load_mask(image_id)
-    print("mask", mask.shape)
-    # print("class_ids",class_ids)
-    visualize.display_top_masks(
-        image, mask, class_ids, dataset_train.class_names)
+# image_ids = np.random.choice(dataset_train.image_ids, 4)
+# for image_id in image_ids:
+#     image = dataset_train.load_image(image_id)
+#     mask, class_ids = dataset_train.load_mask(image_id)
+#     print("mask", mask.shape)
+#     # print("class_ids",class_ids)
+#     visualize.display_top_masks(
+#         image, mask, class_ids, dataset_train.class_names)
 
 
 # ## Ceate Model
@@ -381,10 +389,10 @@ elif init_with == "last":
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
 # 锁定resnet部分权重，在预训练完时使用
-model.train(dataset_train, dataset_val,
-            learning_rate=config.LEARNING_RATE,
-            epochs=1,
-            layers='heads')
+# model.train(dataset_train, dataset_val,
+#             learning_rate=config.LEARNING_RATE,
+#             epochs=1,
+#             layers='heads')
 
 
 # In[9]:
@@ -396,7 +404,7 @@ model.train(dataset_train, dataset_val,
 # train by name pattern.
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE / 10,
-            epochs=2,
+            epochs=5,
             layers="all")
 
 
@@ -443,20 +451,21 @@ model.load_weights(model_path, by_name=True)
 # Test on a random image
 for image_id in dataset_val.image_ids:
     # image_id = random.choice(dataset_val.image_ids)
-    original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
-                                                                                       image_id, use_mini_mask=False)
+    # original_image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(dataset_val, inference_config,
+    #                                                                                    image_id, use_mini_mask=False)
 
-    log("original_image", original_image)
-    log("image_meta", image_meta)
-    log("gt_class_id", gt_class_id)
-    log("gt_bbox", gt_bbox)
-    log("gt_mask", gt_mask)
+    # log("original_image", original_image)
+    # log("image_meta", image_meta)
+    # log("gt_class_id", gt_class_id)
+    # log("gt_bbox", gt_bbox)
+    # log("gt_mask", gt_mask)
 
     # visualize.display_instances(original_image, gt_bbox, gt_mask, gt_class_id,
     #                             dataset_train.class_names, figsize=(8, 8))
 
     # In[13]:
 
+    original_image = dataset_val.load_image(image_id)  # 跳过调整大小直接读取图片
     results = model.detect([original_image], verbose=1)
 
     r = results[0]
@@ -474,7 +483,7 @@ for image_id in dataset_val.image_ids:
 
 # Compute VOC-Style mAP @ IoU=0.5
 # Running on 10 images. Increase for better accuracy.
-image_ids = np.random.choice(dataset_val.image_ids, 10)
+image_ids = np.random.choice(dataset_val.image_ids, 1)
 APs = []
 for image_id in image_ids:
     # Load image and ground truth data

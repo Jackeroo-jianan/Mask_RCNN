@@ -921,6 +921,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
                        strides=anchor_stride,
                        name='rpn_conv_shared')(feature_map)
 
+    # ===================下面代码作为锚点前景和背景分类=====================
     # Anchor Score. [batch, height, width, anchors per location * 2].
     # anchors_per_location=3，3种锚点比例
     x = KL.Conv2D(2 * anchors_per_location, (1, 1), padding='valid',
@@ -936,6 +937,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
     rpn_probs = KL.Activation(
         "softmax", name="rpn_class_xxx")(rpn_class_logits)
 
+    # ===================下面代码作为锚点框的调整偏移量=====================
     # Bounding box refinement. [batch, H, W, anchors per location * depth]
     # where depth is [x, y, log(w), log(h)]
     # 边框优化，activation='linear'线性激活函数
@@ -944,6 +946,7 @@ def rpn_graph(feature_map, anchors_per_location, anchor_stride):
 
     # Reshape to [batch, anchors, 4]
     # 4个框坐标，anchors=height*width*3种锚点比例
+    # 这里留意回归坐标只用了linear线性激活函数，因为结果是线性的
     rpn_bbox = KL.Lambda(lambda t: tf.reshape(t, [tf.shape(t)[0], -1, 4]))(x)
 
     return [rpn_class_logits, rpn_probs, rpn_bbox]

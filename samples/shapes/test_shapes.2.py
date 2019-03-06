@@ -35,8 +35,8 @@ from coco import coco
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Local path to trained weights file
-# COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+COCO_MODEL_PATH = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
+# COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 
 
 # ## Configurations
@@ -117,10 +117,8 @@ class MyDataset(utils.Dataset):
         # image = image * bg_color.astype(np.uint8)
         # for shape, color, dims in info['shapes']:
         #     image = self.draw_shape(image, shape, dims, color)
-        # image = keras.preprocessing.image.load_img(
-        #     info["path"], target_size=(info['height'], info['width']))
         image = keras.preprocessing.image.load_img(
-            info["path"], target_size=(1080, 1920))
+            info["path"], target_size=(info['height'], info['width']))
         image = keras.preprocessing.image.img_to_array(image)
         return image
 
@@ -228,7 +226,7 @@ class ShapesConfig(Config):
     # BACKBONE = "resnet50"
 
 
-class InferenceConfig(coco.CocoConfig):
+class InferenceConfig(ShapesConfig):
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
 
@@ -257,7 +255,7 @@ dataset_val.load_shapes(count_val, height, width, img_floder_val,
 dataset_val.prepare()
 
 model_path = os.path.join(MODEL_DIR, "mask_rcnn_my.h5")
-model_path = COCO_MODEL_PATH
+# model_path = COCO_MODEL_PATH
 # model.keras_model.save_weights(model_path)
 
 
@@ -288,8 +286,6 @@ print("dataset_val.class_names", dataset_val.class_names)
 #                 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster',
 #                 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
 #                 'teddy bear', 'hair drier', 'toothbrush']
-                
-class_names = ['BG', u'人']
 # Test on a random image
 for image_id in dataset_val.image_ids:
     # 重新调整图片大小为正方形，边长等于最长边
@@ -307,13 +303,7 @@ for image_id in dataset_val.image_ids:
 
     # In[13]:
     original_image = dataset_val.load_image(image_id)  # 跳过调整大小直接读取图片
-    
-    start = time.time()
     results = model.detect([original_image], verbose=1)
-    end = time.time()
-    
-    print("视频每帧时间：")
-    print(end-start)
 
     r = results[0]
     # print("识别：", r)
