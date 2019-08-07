@@ -292,7 +292,7 @@ class ProposalLayer(KE.Layer):
 
     def call(self, inputs):
         # Box Scores. Use the foreground class confidence. [Batch, num_rois, 1]
-        # 前景/背景分类[Batch, num_rois, 1]
+        # 只使用前景[Batch, num_rois, 1]
         scores = inputs[0][:, :, 1]
         # Box deltas [batch, num_rois, 4]
         # 框偏移量
@@ -1723,6 +1723,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                    no_augmentation_sources=None):
     """A generator that returns images and corresponding target class ids,
     bounding box deltas, and masks.
+    返回图像和相应的目标类id、框坐标和掩码
 
     dataset: The Dataset object to pick data from
     config: The model config object
@@ -1769,6 +1770,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
 
     # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
+    # 生成Anchors，IMAGE_SHAPE(width, height, 3通道)
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
     anchors = utils.generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                              config.RPN_ANCHOR_RATIOS,
@@ -1788,6 +1790,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             image_id = image_ids[image_index]
 
             # If the image source is not to be augmented pass None as augmentation
+            # 通过image_id获取图片、图片信息、分类ids、目标框、masks
             if dataset.image_info[image_id]['source'] in no_augmentation_sources:
                 image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
                     load_image_gt(dataset, config, image_id, augment=augment,
@@ -1806,6 +1809,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 continue
 
             # RPN Targets
+            # 生成RPN标签
             rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
                                                     gt_class_ids, gt_boxes, config)
 
@@ -1888,7 +1892,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                             batch_mrcnn_class_ids, -1)
                         outputs.extend(
                             [batch_mrcnn_class_ids, batch_mrcnn_bbox, batch_mrcnn_mask])
-
+                
                 yield inputs, outputs
 
                 # start a new batch
@@ -2126,12 +2130,14 @@ class MaskRCNN():
 
             # Network Heads
             # TODO: verify that this handles zero padded ROIs
+            # 最后的分类网络，通过特征图与存在物体的框
             mrcnn_class_logits, mrcnn_class, mrcnn_bbox =\
                 fpn_classifier_graph(rois, mrcnn_feature_maps, input_image_meta,
                                      config.POOL_SIZE, config.NUM_CLASSES,
                                      train_bn=config.TRAIN_BN,
                                      fc_layers_size=config.FPN_CLASSIF_FC_LAYERS_SIZE)
 
+            # 最后的mask网络，通过特征图与存在物体的框
             mrcnn_mask = build_fpn_mask_graph(rois, mrcnn_feature_maps,
                                               input_image_meta,
                                               config.MASK_POOL_SIZE,
@@ -2139,6 +2145,7 @@ class MaskRCNN():
                                               train_bn=config.TRAIN_BN)
 
             # TODO: clean up (use tf.identify if necessary)
+            # 最后输出的，存在物体的框
             output_rois = KL.Lambda(lambda x: x * 1, name="output_rois")(rois)
 
             # Losses
